@@ -25,7 +25,12 @@ jobs:
             - name: Package and release for Wrath
               uses: BigWigsMods/packager@master
               with:
-                  args: -g wrath
+                  args: -g bcc
+
+            - name: Package and release for Wrath
+              uses: BigWigsMods/packager@master
+              with:
+                  args: -g mists
 
             - name: Package and release for Retail
               uses: BigWigsMods/packager@master
