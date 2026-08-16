@@ -1,5 +1,5 @@
 ## Interface: 120100
-## Interface-Mists: 50505
+## Interface-Mists: 50504
 
 ## Title: Guild Bank Snapshots
 ## Notes: Creates snapshots of guild bank logs.
