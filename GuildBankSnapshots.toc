@@ -1,4 +1,5 @@
 ## Interface: 120100
+## Interface-BCC: 20506
 ## Interface-Mists: 50504
 
 ## Title: Guild Bank Snapshots
