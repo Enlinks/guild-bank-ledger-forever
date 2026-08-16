@@ -40,6 +40,7 @@ end
 
 function addon:OnEnable()
     addon:RegisterEvent("PLAYER_ENTERING_WORLD")
+    addon:RegisterEvent("GUILDBANKLOG_UPDATE")
 end
 
 function addon:PLAYER_ENTERING_WORLD()

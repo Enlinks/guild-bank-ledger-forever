@@ -4,6 +4,8 @@ local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true)
 local ACD = LibStub("AceConfigDialog-3.0")
 local AceSerializer = LibStub("AceSerializer-3.0")
 
+local tabCache = 0
+
 local function ValidateScan(db, override)
     if not private.bankIsOpen then
         addon:Print(L.BankClosedError)
@@ -124,9 +126,23 @@ function addon:GUILDBANKFRAME_OPENED()
     private.bankIsOpen = true
     private:UpdateGuildDatabase() -- Ensure guild bank database is formatted
 
-    local autoScanSettings = private.db.global.settings.scans.autoScan
-    if autoScanSettings.enabled and ValidateScanFrequency(autoScanSettings) then
-        addon:ScanGuildBank(true) -- AutoScan
+    tabCache = 0
+    for i = 1, MAX_GUILDBANK_TABS do
+        QueryGuildBankTab(i)
+        QueryGuildBankLog(i)
+    end
+end
+
+function addon:GUILDBANKLOG_UPDATE()
+    tabCache = tabCache + 1
+
+    if tabCache >= MAX_GUILDBANK_TABS then
+        tabCache = 0
+
+        local autoScanSettings = private.db.global.settings.scans.autoScan
+        if autoScanSettings.enabled and ValidateScanFrequency(autoScanSettings) then
+            addon:ScanGuildBank(true) -- AutoScan
+        end
     end
 end
 
@@ -141,16 +157,15 @@ function addon:ScanGuildBank(isAutoScan, override)
 
     private.isScanning = isAutoScan and "auto" or true
 
-    -- Query guild bank tabs
-    local numTabs = private.db.global.guilds[private:GetGuildID()].numTabs
-    for tab = 1, numTabs do
-        QueryGuildBankTab(tab)
-        QueryGuildBankLog(tab)
-        -- Query transactions
-        for index = 1, GetNumGuildBankTransactions(tab) do
-            GetGuildBankTransaction(tab, index)
-        end
-    end
+    -- -- Query guild bank tabs
+    -- for tab = 1, numTabs do
+    --     QueryGuildBankTab(tab)
+    --     QueryGuildBankLog(tab)
+    --     -- Query transactions
+    --     for index = 1, GetNumGuildBankTransactions(tab) do
+    --         GetGuildBankTransaction(tab, index)
+    --     end
+    -- end
 
     QueryGuildBankLog(MAX_GUILDBANK_TABS + 1)
     for i = 1, GetNumGuildBankMoneyTransactions() do
@@ -158,6 +173,7 @@ function addon:ScanGuildBank(isAutoScan, override)
     end
 
     -- Scan bank
+    local numTabs = private.db.global.guilds[private:GetGuildID()].numTabs
     C_Timer.After(private.db.global.settings.scans.delay, function()
         local db = { totalMoney = 0, moneyTransactions = {}, tabs = {} }
 
@@ -165,19 +181,22 @@ function addon:ScanGuildBank(isAutoScan, override)
         for tab = 1, numTabs do
             db.tabs[tab] = { items = {}, transactions = {} }
             local tabDB = db.tabs[tab]
+            local canView = GetGuildBankTabPermissions(tab)
 
-            for index = 1, GetNumGuildBankTransactions(tab) do
-                local transactionType, name, itemLink, count, moveOrigin, moveDestination, year, month, day, hour = GetGuildBankTransaction(tab, index)
-                name = name or UNKNOWN
+            if canView then
+                for index = 1, GetNumGuildBankTransactions(tab) do
+                    local transactionType, name, itemLink, count, moveOrigin, moveDestination, year, month, day, hour = GetGuildBankTransaction(tab, index)
+                    name = name or UNKNOWN
 
-                tinsert(tabDB.transactions, AceSerializer:Serialize(transactionType, name, itemLink, count, moveOrigin or 0, moveDestination or 0, year, month, day, hour))
-            end
+                    tinsert(tabDB.transactions, AceSerializer:Serialize(transactionType, name, itemLink, count, moveOrigin or 0, moveDestination or 0, year, month, day, hour))
+                end
 
-            for slot = 1, (MAX_GUILDBANK_SLOTS_PER_TAB or 98) do
-                local slotItemID = GetItemInfoInstant(GetGuildBankItemLink(tab, slot) or 0)
-                if slotItemID then
-                    local _, slotItemCount = GetGuildBankItemInfo(tab, slot)
-                    tabDB.items[slotItemID] = tabDB.items[slotItemID] and tabDB.items[slotItemID] + slotItemCount or slotItemCount
+                for slot = 1, (MAX_GUILDBANK_SLOTS_PER_TAB or 98) do
+                    local slotItemID = GetItemInfoInstant(GetGuildBankItemLink(tab, slot) or 0)
+                    if slotItemID then
+                        local _, slotItemCount = GetGuildBankItemInfo(tab, slot)
+                        tabDB.items[slotItemID] = tabDB.items[slotItemID] and tabDB.items[slotItemID] + slotItemCount or slotItemCount
+                    end
                 end
             end
         end

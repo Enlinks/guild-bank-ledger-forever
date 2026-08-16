@@ -155,7 +155,7 @@ function private:GetMoneyTransactionLabel(scanID, transaction)
 
     local t = date("*t", time())
     local s = date("*t", scanID)
-    local recentDate = RecentTimeDate(info.year + (t.year - s.year), info.month + (t.month - s.month), info.day + (t.day - s.day), info.hour + (t.hour - s.hour))
+    local recentDate = TimeUtil.GetRecentTimeDate(info.year + (t.year - s.year), info.month + (t.month - s.month), info.day + (t.day - s.day), info.hour + (t.hour - s.hour))
     if private.db.global.settings.preferences.dateType == "approx" then
         msg = msg and (msg .. GUILD_BANK_LOG_TIME_PREPEND .. date(private.db.global.settings.preferences.dateFormat, private:GetTransactionDate(scanID or time(), info.year, info.month, info.day, info.hour)))
     else
@@ -219,7 +219,8 @@ function private:GetTransactionLabel(scanID, transaction)
 
     local t = date("*t", time())
     local s = date("*t", scanID)
-    local recentDate = RecentTimeDate(info.year + (t.year - s.year), info.month + (t.month - s.month), info.day + (t.day - s.day), info.hour + (t.hour - s.hour))
+    print(t, s, info.year, info.month, info.day, info.hour)
+    local recentDate = TimeUtil.GetRecentTimeDate(info.year + (t.year - s.year), info.month + (t.month - s.month), info.day + (t.day - s.day), info.hour + (t.hour - s.hour))
     if private.db.global.settings.preferences.dateType == "approx" then
         msg = msg and (msg .. GUILD_BANK_LOG_TIME_PREPEND .. date(private.db.global.settings.preferences.dateFormat, private:GetTransactionDate(scanID or time(), info.year, info.month, info.day, info.hour)))
     else
