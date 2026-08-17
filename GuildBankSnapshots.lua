@@ -60,7 +60,7 @@ function addon:SlashCommandFunc(input)
     if cmd == "scan" then
         addon:ScanGuildBank(nil, arg == "o")
     else
-        private:LoadFrame()
+        private:LoadFrame(nil, private.selectedGuild or private.db.global.settings.preferences.defaultGuild, private.selectedScan)
     end
 end
 
