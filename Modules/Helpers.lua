@@ -6,6 +6,11 @@ local AceSerializer = LibStub("AceSerializer-3.0")
 GUILD_BANK_LOG_TIME_PREPEND = GUILD_BANK_LOG_TIME_PREPEND or "|cff009999   "
 local RecentTimeDate = TimeUtil and TimeUtil.GetRecentTimeDate or RecentTimeDate
 
+function private:debug(...)
+    if private.db.global.debug then
+        addon:Print(...)
+    end
+end
 function private:GetFilterNames(guildKey, scanID, none)
     local scan = private.db.global.guilds[guildKey].scans[scanID]
     local names, sorting = {}, {}

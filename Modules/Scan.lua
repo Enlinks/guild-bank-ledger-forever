@@ -5,6 +5,7 @@ local ACD = LibStub("AceConfigDialog-3.0")
 local AceSerializer = LibStub("AceSerializer-3.0")
 
 local tabCache = 0
+local queryCache = false
 
 local function ValidateScan(db, override)
     if not private.bankIsOpen then
@@ -126,18 +127,38 @@ function addon:GUILDBANKFRAME_OPENED()
     private.bankIsOpen = true
     private:UpdateGuildDatabase() -- Ensure guild bank database is formatted
 
-    tabCache = 0
-    for i = 1, MAX_GUILDBANK_TABS do
-        QueryGuildBankTab(i)
-        QueryGuildBankLog(i)
+    private:debug("Querying tabs #(constant/function/db)", MAX_GUILDBANK_TABS, GetNumGuildBankTabs(), private.db.global.guilds[private:GetGuildID()].numTabs)
+
+    if private.db.global.guilds[private:GetGuildID()].numTabs > 0 then
+        tabCache = 0
+        queryCache = true
+        QueryGuildBankTab(1)
+        QueryGuildBankLog(1)
     end
 end
 
 function addon:GUILDBANKLOG_UPDATE()
-    tabCache = tabCache + 1
+    if not queryCache then
+        return
+    end
 
-    if tabCache >= MAX_GUILDBANK_TABS then
+    local numTabs = private.db.global.guilds[private:GetGuildID()].numTabs
+    tabCache = tabCache + 1
+    private:debug("Log event update (tab/transactions/transaction1)", tabCache, GetNumGuildBankTransactions(tabCache), GetGuildBankTransaction(tabCache, 1))
+
+    if tabCache <= numTabs then
+        -- If data is not available, decrement tabCache to re-query the tab
+        local tabInfo = { GetGuildBankTransaction(tabCache, 1) }
+        if GetNumGuildBankTransactions(tabCache) > 0 and addon.tcount(tabInfo) == 0 then
+            private:debug("Re-querying tab (tab)", tabCache)
+            tabCache = tabCache - 1
+        end
+
+        QueryGuildBankTab(tabCache + 1)
+        QueryGuildBankLog(tabCache + 1)
+    elseif tabCache >= numTabs + 1 then
         tabCache = 0
+        queryCache = false
 
         local autoScanSettings = private.db.global.settings.scans.autoScan
         if autoScanSettings.enabled and ValidateScanFrequency(autoScanSettings) then
@@ -157,22 +178,19 @@ function addon:ScanGuildBank(isAutoScan, override)
 
     private.isScanning = isAutoScan and "auto" or true
 
-    QueryGuildBankLog(MAX_GUILDBANK_TABS + 1)
-    for i = 1, GetNumGuildBankMoneyTransactions() do
-        GetGuildBankMoneyTransaction(i)
-    end
-
     -- Scan bank
     local numTabs = private.db.global.guilds[private:GetGuildID()].numTabs
     C_Timer.After(private.db.global.settings.scans.delay, function()
         local db = { totalMoney = 0, moneyTransactions = {}, tabs = {} }
+        private:debug("Beginning transaction scan (numTabs)", numTabs)
 
         -- Item transactions
         for tab = 1, numTabs do
             db.tabs[tab] = { items = {}, transactions = {} }
             local tabDB = db.tabs[tab]
-            local canView = GetGuildBankTabPermissions(tab)
+            local _, _, canView = GetGuildBankTabInfo(tab)
 
+            private:debug("Saving (canView/tab/transactions/transaction1)", canView, tab, GetNumGuildBankTransactions(tab), GetGuildBankTransaction(tab, 1))
             if canView then
                 for index = 1, GetNumGuildBankTransactions(tab) do
                     local transactionType, name, itemLink, count, moveOrigin, moveDestination, year, month, day, hour = GetGuildBankTransaction(tab, index)

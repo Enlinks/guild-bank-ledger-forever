@@ -61,6 +61,7 @@ function private:DeleteCorruptedScans(lastScan)
                 -- Can't guarantee all corrupt logs will be cleaned up because we can't know that if either items or transactions are empty that it's corrupt rather than a new bank
                 if not tabInfo or (addon.tcount(tabInfo.items) == 0 and addon.tcount(tabInfo.transactions) == 0) then
                     empty = empty + 1
+                    private:debug("Empty tab detected (guildID/scanID/tab)", guildID, scanID, i)
                 else
                     for _, transaction in pairs(tabInfo.transactions) do
                         local info = private:GetTransactionInfo(transaction)
@@ -71,6 +72,7 @@ function private:DeleteCorruptedScans(lastScan)
                         -- Delete corrupted scans with missing itemLink info
                         if not info.itemLink or info.itemLink == "" or info.itemLink == UNKNOWN then
                             corruptItems = true
+                            private:debug("Corrupt item detected (guildID/scanID/tab/transaction)", guildID, scanID, i, transaction)
                             break
                         end
                     end
@@ -80,11 +82,13 @@ function private:DeleteCorruptedScans(lastScan)
             -- Count empty money transactions
             if addon.tcount(scan.moneyTransactions) == 0 then
                 empty = empty + 1
+                private:debug("Empty money transactions detected (guildID/scanID)", guildID, scanID)
             else
                 for _, transaction in pairs(scan.moneyTransactions) do
                     local info = private:GetMoneyTransactionInfo(transaction)
                     if not info.name then
                         info.name = UNKNOWN
+                        private:debug("Money transaction info (guildID/scanID/transaction)", guildID, scanID, transaction)
                     end
                 end
             end
