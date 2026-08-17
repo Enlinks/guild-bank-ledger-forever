@@ -76,6 +76,7 @@ L["None"] = true
 L["Pipe"] = true
 L["Preferences"] = true
 L["Processing"] = true
+L["Querying guild bank tabs."] = true
 L["Repair"] = true
 L["Repairs"] = true
 L["Review"] = true

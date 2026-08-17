@@ -129,6 +129,11 @@ function addon:GUILDBANKFRAME_OPENED()
 
     private:debug("Querying tabs #(constant/function/db)", MAX_GUILDBANK_TABS, GetNumGuildBankTabs(), private.db.global.guilds[private:GetGuildID()].numTabs)
 
+    local autoScanSettings = private.db.global.settings.scans.autoScan
+    if autoScanSettings.enabled and ValidateScanFrequency(autoScanSettings) then
+        addon:Print(L["Querying guild bank tabs."])
+    end
+
     if private.db.global.guilds[private:GetGuildID()].numTabs > 0 then
         tabCache = 0
         queryCache = true
