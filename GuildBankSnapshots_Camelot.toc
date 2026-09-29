@@ -1,0 +1,17 @@
+## Interface: 16001
+
+## Title: Guild Bank Snapshots
+## Notes: Creates snapshots of guild bank logs.
+## Author: Nikketa-Hyjal-US
+## Version: 3.8.2-forever.1
+## SavedVariables: GuildBankSnapshotsDB
+
+## X-Curse-Project-ID: 82308
+## X-WoWI-ID: 22913
+## X-Wago-ID: JZKblkN1
+
+Compat.lua
+libs.xml
+Locales\embeds.xml
+GuildBankSnapshots.lua
+Modules\embeds.xml
