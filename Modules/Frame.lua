@@ -12,6 +12,10 @@ local menuList = {
         value = "Export",
         text = L["Export"],
     },
+    {
+        value = "Ledger",
+        text = L["Ledger"],
+    },
     -- {
     --     value = "Trends",
     --     text = L["Trends"],

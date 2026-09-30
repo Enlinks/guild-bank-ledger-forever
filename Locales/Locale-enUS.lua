@@ -58,6 +58,7 @@ L["hours"] = true
 L["Item"] = true
 L["Items"] = true
 L["Item Level"] = true
+L["Ledger"] = true
 L["Loading scans"] = true
 L["Master"] = true
 L["Max Item Level"] = true
