@@ -3,11 +3,65 @@ local addon = LibStub("AceAddon-3.0"):GetAddon(addonName)
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true)
 local AceGUI = LibStub("AceGUI-3.0")
 
+function private:HasMoneyRoster(moneyInfo)
+    return addon.tcount(moneyInfo.deposit) + addon.tcount(moneyInfo.buyTab) + addon.tcount(moneyInfo.withdraw) + addon.tcount(moneyInfo.repair) > 0
+end
+
+function private:FillMoneyRoster(scrollFrame, moneyInfo)
+    local names = {}
+    for name in pairs(moneyInfo.deposit) do
+        names[name] = true
+    end
+    for name in pairs(moneyInfo.buyTab) do
+        names[name] = true
+    end
+    for name in pairs(moneyInfo.withdraw) do
+        names[name] = true
+    end
+    for name in pairs(moneyInfo.repair) do
+        names[name] = true
+    end
+
+    local rows = {}
+    for name in pairs(names) do
+        local deposited = (moneyInfo.deposit[name] or 0) + (moneyInfo.buyTab[name] or 0)
+        local withdrawn = moneyInfo.withdraw[name] or 0
+        local repairs = moneyInfo.repair[name] or 0
+        tinsert(rows, {
+            name = name,
+            deposited = deposited,
+            withdrawn = withdrawn,
+            repairs = repairs,
+            net = deposited - withdrawn - repairs,
+        })
+    end
+    sort(rows, function(a, b)
+        if a.net ~= b.net then
+            return a.net > b.net
+        end
+        return a.name < b.name
+    end)
+
+    local red = LibStub("LibAddonUtils-1.0").ChatColors["RED"]
+    local white = LibStub("LibAddonUtils-1.0").ChatColors["WHITE"]
+    for _, row in ipairs(rows) do
+        local line = AceGUI:Create("GuildBankSnapshotsTransaction")
+        line:SetFullWidth(true)
+        line:SetText(format("%s: %s %s    %s %s    %s %s    %s %s%s|r", row.name, L["Deposits"], GetCoinTextureString(row.deposited), L["Withdrawals"], GetCoinTextureString(row.withdrawn), L["Repairs"], GetCoinTextureString(row.repairs), L["Net"], row.net < 0 and red or white, GetCoinTextureString(math.abs(row.net))))
+        scrollFrame:AddChild(line)
+    end
+end
+
 local function moneyTabGroupList(moneyInfo)
     return {
         {
             value = "summary",
             text = L["Summary"],
+        },
+        {
+            value = "roster",
+            text = L["All Characters"],
+            disabled = not private:HasMoneyRoster(moneyInfo),
         },
         {
             value = "deposit",
@@ -134,6 +188,8 @@ local function SelectMoneyGroupTab(moneyTabGroup, tab, moneyInfo)
         netMoney:SetFullWidth(true)
         netMoney:SetText(format("%s: %s%s|r", L["Net"], netCount < 0 and red or white, GetCoinTextureString(math.abs(netCount))))
         money:AddChild(netMoney)
+    elseif tab == "roster" then
+        private:FillMoneyRoster(scrollFrame, moneyInfo)
     elseif tab == "deposit" then
         for character, count in addon.pairs(moneyInfo.deposit) do
             local line = AceGUI:Create("GuildBankSnapshotsTransaction")

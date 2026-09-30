@@ -7,6 +7,7 @@ LibStub("LibAddonUtils-1.0"):Embed(addon)
 L["Buy Tab"] = true
 L["Withdraw For Tab"] = true
 L["Age Measure"] = true
+L["All Characters"] = true
 L["Age Unit"] = true
 L["Alert scan progress"] = true
 L["Analyze"] = true

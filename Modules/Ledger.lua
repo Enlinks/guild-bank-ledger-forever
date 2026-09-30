@@ -193,6 +193,11 @@ local function moneyTabGroupList(moneyInfo)
             text = L["Summary"],
         },
         {
+            value = "roster",
+            text = L["All Characters"],
+            disabled = not private:HasMoneyRoster(moneyInfo),
+        },
+        {
             value = "deposit",
             text = L["Deposits"],
             disabled = addon.tcount(moneyInfo.deposit) == 0,
@@ -317,6 +322,8 @@ local function SelectMoneyGroupTab(moneyTabGroup, tab, moneyInfo)
         netMoney:SetFullWidth(true)
         netMoney:SetText(format("%s: %s%s|r", L["Net"], netCount < 0 and red or white, GetCoinTextureString(math.abs(netCount))))
         money:AddChild(netMoney)
+    elseif tab == "roster" then
+        private:FillMoneyRoster(scrollFrame, moneyInfo)
     elseif tab == "deposit" then
         for character, count in addon.pairs(moneyInfo.deposit) do
             local line = AceGUI:Create("GuildBankSnapshotsTransaction")
