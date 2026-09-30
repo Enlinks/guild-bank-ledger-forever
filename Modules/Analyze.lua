@@ -42,13 +42,19 @@ function private:FillMoneyRoster(scrollFrame, moneyInfo)
         return a.name < b.name
     end)
 
+    local money = AceGUI:Create("InlineGroup")
+    money:SetLayout("Flow")
+    money:SetFullWidth(true)
+    money:SetTitle(L["Money"])
+    scrollFrame:AddChild(money)
+
     local red = LibStub("LibAddonUtils-1.0").ChatColors["RED"]
     local white = LibStub("LibAddonUtils-1.0").ChatColors["WHITE"]
     for _, row in ipairs(rows) do
         local line = AceGUI:Create("GuildBankSnapshotsTransaction")
         line:SetFullWidth(true)
-        line:SetText(format("%s: %s %s    %s %s    %s %s    %s %s%s|r", row.name, L["Deposits"], GetCoinTextureString(row.deposited), L["Withdrawals"], GetCoinTextureString(row.withdrawn), L["Repairs"], GetCoinTextureString(row.repairs), L["Net"], row.net < 0 and red or white, GetCoinTextureString(math.abs(row.net))))
-        scrollFrame:AddChild(line)
+        line:SetText(format("%s: %s %s %s %s %s %s %s %s%s|r", row.name, L["Deposits"], GetCoinTextureString(row.deposited), L["Withdrawals"], GetCoinTextureString(row.withdrawn), L["Repairs"], GetCoinTextureString(row.repairs), L["Net"], row.net < 0 and red or white, GetCoinTextureString(math.abs(row.net))))
+        money:AddChild(line)
     end
 end
 
