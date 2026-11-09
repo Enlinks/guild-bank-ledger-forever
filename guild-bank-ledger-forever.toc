@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Interface-Camelot: 16001
-## Title: Guild Bank Ledger Forever
+## Title: Guild Bank Ledger (Forever)
 ## Notes: Aggregated guild bank ledger. One running log per guild.
 ## Author: Enlinks
 ## Version: 1.0.0

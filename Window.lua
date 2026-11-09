@@ -990,7 +990,7 @@ local function createMinimap()
 			return
 		end
 		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-		GameTooltip:SetText("Guild Ledger", 1, 1, 1)
+		GameTooltip:SetText("Guild Bank Ledger", 1, 1, 1)
 		GameTooltip:AddLine("Open the ledger. Drag to move.", Theme.muted[1], Theme.muted[2], Theme.muted[3])
 		GameTooltip:Show()
 	end)
@@ -1036,7 +1036,7 @@ local function createWindow()
 
 	titleText = Widgets.Label(frame, "title", Theme.text)
 	titleText:SetPoint("TOPLEFT", 14, -8)
-	titleText:SetText("Guild Ledger")
+	titleText:SetText("Guild Bank Ledger")
 
 	local closeButton = Widgets.Button(frame, "Close", 64, 22)
 	closeButton:SetPoint("TOPRIGHT", -10, -8)

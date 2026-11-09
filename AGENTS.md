@@ -1,4 +1,4 @@
-# Working on Guild Bank Ledger Forever
+# Working on Guild Bank Ledger (Forever)
 
 Original addon for World of Warcraft: Forever (interface 16001). It scans the guild bank log and keeps one running ledger per guild. Read `README.md` before changing behaviour.
 

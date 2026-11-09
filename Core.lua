@@ -13,7 +13,7 @@ local DEFAULTS = {
 }
 
 function GBLF.Print(text)
-	local message = "|cffd6e2f5Guild Ledger:|r " .. tostring(text)
+	local message = "|cffd6e2f5Guild Bank Ledger:|r " .. tostring(text)
 	if DEFAULT_CHAT_FRAME then
 		DEFAULT_CHAT_FRAME:AddMessage(message)
 	end

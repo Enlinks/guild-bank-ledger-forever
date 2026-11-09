@@ -1,4 +1,4 @@
-# Guild Bank Ledger Forever
+# Guild Bank Ledger (Forever)
 
 An original guild bank ledger for World of Warcraft: Forever. Open the bank, scan the log, and keep one running total per guild: who put gold and items in, who took them out, repairs, and tab purchases.
 
