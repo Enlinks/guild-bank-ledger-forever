@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: Guild Bank Ledger Forever
+## Notes: Aggregated guild bank ledger. One running log per guild.
+## Author: Enlinks
+## Version: 1.0.0
+## SavedVariables: GuildBankLedgerForeverDB
+## IconTexture: Interface\MoneyFrame\UI-GoldIcon
+## Category: Guild
+
+Core.lua
+Time.lua
+Ledger.lua
+Scan.lua
+Widgets.lua
+Window.lua
