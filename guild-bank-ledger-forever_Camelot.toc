@@ -4,7 +4,7 @@
 ## Author: Enlinks
 ## Version: 1.0.0
 ## SavedVariables: GuildBankLedgerForeverDB
-## IconTexture: Interface\MoneyFrame\UI-GoldIcon
+## IconTexture: Interface\AddOns\guild-bank-ledger-forever\icon.png
 ## Category: Guild
 
 Core.lua
