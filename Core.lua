@@ -55,6 +55,13 @@ function GBLF.InitDB()
 			guild.tabNames = type(guild.tabNames) == "table" and guild.tabNames or {}
 			guild.nextId = guild.nextId or (#guild.txns + 1)
 			guild.nextOrd = guild.nextOrd or guild.nextId
+			if not guild.deduped then
+				local removed = GBLF.Ledger.CollapseDuplicates(guild)
+				guild.deduped = true
+				if removed > 0 then
+					GBLF.Print("Removed " .. removed .. " duplicated lines from " .. (guild.name or key) .. ".")
+				end
+			end
 		end
 	end
 	GBLF.caches = {}

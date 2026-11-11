@@ -223,6 +223,47 @@ csv = Ledger.ExportTransactions(quoted)
 eq(type(string.find(csv, '"Ada ""Ace"""', 1, true)), "number", "quotes are escaped")
 eq(type(string.find(csv, '"Linen, Cloth"', 1, true)), "number", "commas are quoted")
 
+-- A later scan can return the same money lines in a different order.
+-- That must not store the withdrawal a second time.
+local d7 = Time.Pack(2026, 11, 7)
+local messy = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(messy, "money", {
+	line("Warpig", "deposit", d7, { copper = 200 }),
+	line("Enlinks", "withdraw", d7, { copper = 95000 }),
+	line("Holi", "deposit", d7, { copper = 500 }),
+})
+added, gap = Ledger.MergeStream(messy, "money", {
+	line("Holi", "deposit", d7, { copper = 500 }),
+	line("Enlinks", "withdraw", d7, { copper = 95000 }),
+	line("Warpig", "deposit", d7, { copper = 200 }),
+})
+eq(added, 0, "reordered rescan adds nothing")
+eq(gap, false, "reorder is not a gap")
+eq(#messy.txns, 3, "reorder does not duplicate the withdrawal")
+
+local d9 = Time.Pack(2026, 11, 9)
+local agedLine = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(agedLine, "money", {
+	line("Enlinks", "deposit", d9, { copper = 10000, precision = "hour", hour = 12 }),
+})
+added, gap = Ledger.MergeStream(agedLine, "money", {
+	line("Enlinks", "deposit", d9, { copper = 10000, precision = "day" }),
+})
+eq(added, 0, "a day-old reread matches the pinned hour")
+eq(#agedLine.txns, 1, "aging a line does not duplicate it")
+
+local doubled = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(doubled, "money", {
+	line("Enlinks", "withdraw", d7, { copper = 95000 }),
+	line("Enlinks", "withdraw", d7, { copper = 95000 }),
+	line("Enlinks", "deposit", d7, { copper = 10000 }),
+})
+eq(#doubled.txns, 3, "one read keeps two identical withdrawals")
+local removed = Ledger.CollapseDuplicates(doubled)
+eq(removed, 1, "collapse drops the copied withdrawal")
+eq(#doubled.txns, 2, "the deposit stays beside one withdrawal")
+eq(doubled.txns[2].copper, 10000, "collapse keeps the other amount")
+
 if failed > 0 then
 	io.stderr:write(string.format("%d failed\n", failed))
 	os.exit(1)
