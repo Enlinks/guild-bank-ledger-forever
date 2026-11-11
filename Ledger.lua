@@ -1,7 +1,7 @@
 -- Append-only guild bank ledger.
 -- Each guild bank tab, and the money log, is its own ordered stream.
--- A new read is the last N lines still in that log. Overlap with the tail we
--- already stored is skipped. Lines past that overlap are appended.
+-- A new read is matched against lines already saved, in any order. A line
+-- already stored is not added again. Lines the log no longer shows stay put.
 -- The day is pinned the first time a line is seen and is not moved later.
 
 GBLF = GBLF or {}
@@ -19,6 +19,7 @@ function Ledger.NewGuild(name, realm)
 		nextOrd = 1,
 		tabNames = {},
 		lastScan = nil,
+		deduped = true,
 	}
 end
 
@@ -51,8 +52,15 @@ local function identity(row)
 	return row.itemName
 end
 
+local function canonicalAction(action)
+	if action == "withdrawal" then
+		return "withdraw"
+	end
+	return action
+end
+
 local function sameLine(a, b)
-	if a.action ~= b.action or a.who ~= b.who then
+	if canonicalAction(a.action) ~= canonicalAction(b.action) or a.who ~= b.who then
 		return false
 	end
 	if a.count ~= b.count or a.copper ~= b.copper then
@@ -69,15 +77,33 @@ local function sameLine(a, b)
 	return identity(a) == identity(b)
 end
 
-local function aligns(stored, start, incoming, j, n)
-	for k = 0, n - 1 do
-		local old = stored[start + k]
-		local new = incoming[j + k]
-		if not sameLine(old, new) or not timeOk(old, new) then
-			return false
-		end
+-- Same calendar day for hour and day lines. A month or year age is coarse,
+-- so those lines may land a few days apart and still be the same event.
+local function sameEvent(a, b)
+	if not sameLine(a, b) then
+		return false
+	end
+	local ap = a.precision
+	local bp = b.precision
+	if ap == "year" or bp == "year" or ap == "month" or bp == "month" then
+		return timeOk(a, b)
+	end
+	if GBLF.Time.DayDistance(a.day, b.day) ~= 0 then
+		return false
+	end
+	if a.hour and b.hour then
+		return math.abs(a.hour - b.hour) <= 2
 	end
 	return true
+end
+
+local function findUnused(stored, used, row)
+	for i = 1, #stored do
+		if not used[i] and sameEvent(stored[i], row) then
+			return i
+		end
+	end
+	return nil
 end
 
 -- Oldest first. Larger ageRank is older. Equal ages keep the log's own order:
@@ -108,7 +134,7 @@ local function storeFrom(guild, stream, row, ord)
 		id = guild.nextId,
 		ord = ord,
 		stream = stream,
-		action = row.action,
+		action = canonicalAction(row.action),
 		who = row.who,
 		day = row.day,
 		hour = row.hour,
@@ -169,33 +195,23 @@ function Ledger.MergeStream(guild, stream, incoming)
 		return #incoming, false
 	end
 
-	local bestN = 0
-	local bestJ = 1
-	local maxN = #stored
-	if #incoming < maxN then
-		maxN = #incoming
-	end
-	for n = maxN, 1, -1 do
-		local start = #stored - n + 1
-		local jLast = 1
-		if start == 1 then
-			jLast = #incoming - n + 1
-		end
-		local found = false
-		for j = 1, jLast do
-			if aligns(stored, start, incoming, j, n) then
-				bestN = n
-				bestJ = j
-				found = true
-				break
-			end
-		end
-		if found then
-			break
+	local used = {}
+	local older = {}
+	local newer = {}
+	local matched = false
+	for i = 1, #incoming do
+		local index = findUnused(stored, used, incoming[i])
+		if index then
+			used[index] = true
+			matched = true
+		elseif matched then
+			newer[#newer + 1] = incoming[i]
+		else
+			older[#older + 1] = incoming[i]
 		end
 	end
 
-	if bestN == 0 then
+	if not matched then
 		guild.gaps[#guild.gaps + 1] = {
 			stream = stream,
 			beforeId = guild.nextId,
@@ -206,21 +222,37 @@ function Ledger.MergeStream(guild, stream, incoming)
 		return #incoming, true
 	end
 
-	local added = 0
-	local start = #stored - bestN + 1
-	if bestJ > 1 and start == 1 then
-		local older = {}
-		for i = 1, bestJ - 1 do
-			older[#older + 1] = incoming[i]
+	prependRows(guild, stream, older)
+	for i = 1, #newer do
+		appendRow(guild, stream, newer[i])
+	end
+	return #older + #newer, false
+end
+
+-- Drop a later line that is the same event as an earlier one in that stream.
+-- One read can still record two identical actions. This only repairs a copy
+-- that a later scan stored again.
+function Ledger.CollapseDuplicates(guild)
+	local kept = {}
+	local removed = 0
+	for i = 1, #guild.txns do
+		local txn = guild.txns[i]
+		txn.action = canonicalAction(txn.action)
+		local duplicate = false
+		for j = 1, #kept do
+			if kept[j].stream == txn.stream and sameEvent(kept[j], txn) then
+				duplicate = true
+				break
+			end
 		end
-		prependRows(guild, stream, older)
-		added = added + #older
+		if duplicate then
+			removed = removed + 1
+		else
+			kept[#kept + 1] = txn
+		end
 	end
-	for i = bestJ + bestN, #incoming do
-		appendRow(guild, stream, incoming[i])
-		added = added + 1
-	end
-	return added, false
+	guild.txns = kept
+	return removed
 end
 
 local function charRow(cache, who)
