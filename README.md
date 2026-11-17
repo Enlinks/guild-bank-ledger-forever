@@ -62,10 +62,11 @@ While the addon is in beta, use `0.MINOR.PATCH-beta`. A fix bumps the last numbe
 
 After the beta, use `YYYY.MINOR.PATCH`. `2026.1.0` is the first release. A feature bumps the middle number. A fix bumps the last number. The next year starts at `2027.1.0`.
 
+Release notes are in [CHANGELOG.md](CHANGELOG.md).
+
 ```sh
-git tag 0.1.0-beta
-git push origin main
-git push origin 0.1.0-beta
+git tag 0.1.1-beta
+git push origin main 0.1.1-beta
 ```
 
 A tag whose name contains `beta` is filed as a beta. A tag whose name contains `alpha` is an alpha. Any other tag is a release. A push to `main` without a tag does not publish a file.
