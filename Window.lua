@@ -252,6 +252,9 @@ local function summaryCell(parent, caption)
 	local value = Widgets.Label(block, "body", Theme.text)
 	value:SetPoint("TOPLEFT", 8, -24)
 	value:SetPoint("RIGHT", -6, 0)
+	if value.SetWordWrap then
+		value:SetWordWrap(false)
+	end
 	value:SetText("0")
 	block.value = value
 	return block
@@ -283,12 +286,24 @@ local function buildLedger(parent)
 
 	local captions = { "In", "Out", "Repairs", "Tabs", "Net" }
 	local cells = {}
-	for index, caption in ipairs(captions) do
-		local cell = summaryCell(summary, caption)
-		cell:SetPoint("TOPLEFT", (index - 1) * 118, -4)
-		cell:SetWidth(114)
-		cells[index] = cell
+	for _, caption in ipairs(captions) do
+		cells[#cells + 1] = summaryCell(summary, caption)
 	end
+	local function layoutSummary()
+		local width = summary:GetWidth()
+		if not width or width <= 0 then
+			return
+		end
+		local gap = 4
+		local cellWidth = (width - gap * (#cells - 1)) / #cells
+		for index, cell in ipairs(cells) do
+			cell:ClearAllPoints()
+			cell:SetPoint("TOPLEFT", (index - 1) * (cellWidth + gap), -4)
+			cell:SetWidth(cellWidth)
+		end
+	end
+	summary:SetScript("OnSizeChanged", layoutSummary)
+	layoutSummary()
 	local status = Widgets.Label(summary, "small", Theme.muted)
 	status:SetPoint("BOTTOMLEFT", 8, 6)
 	status:SetPoint("BOTTOMRIGHT", -8, 6)
@@ -568,6 +583,7 @@ local function buildLedger(parent)
 	end)
 
 	function page:Refresh()
+		layoutSummary()
 		local key, guild = GBLF.ViewGuild()
 		local cache = key and GBLF.CacheFor(key) or nil
 		local goldIn, goldOut, repairs, tabs, net = 0, 0, 0, 0, 0
