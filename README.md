@@ -1,8 +1,6 @@
 # Guild Bank Ledger (Forever)
 
-An original guild bank ledger for World of Warcraft: Forever. Open the bank, scan the log, and keep one running total per guild: who put gold and items in, who took them out, repairs, and tab purchases.
-
-This is not a copy of Guild Bank Snapshots, and it does not read that addon's saved data. Old snapshot saves stay where they are.
+A guild bank ledger for World of Warcraft: Forever. Open the bank, scan the log, and keep one running total per guild: who put gold and items in, who took them out, repairs, and tab purchases.
 
 ## Install
 

@@ -1,8 +1,6 @@
 # Working on Guild Bank Ledger (Forever)
 
-Original addon for World of Warcraft: Forever (interface 16001). It scans the guild bank log and keeps one running ledger per guild. Read `README.md` before changing behaviour.
-
-This is not a fork of Guild Bank Snapshots. Do not copy that addon's source, and do not read its saved variables.
+Guild bank ledger for World of Warcraft: Forever (interface 16001). It scans the guild bank log and keeps one running ledger per guild. Read `README.md` before changing behaviour.
 
 ## Layout
 
