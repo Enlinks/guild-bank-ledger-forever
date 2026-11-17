@@ -29,7 +29,7 @@ local KIND_LABEL = {
 local NOTES = {
 	ledger = "The day is fixed the first time a line is seen. An hour is shown only when the log sent one. Out includes tab purchases. Summary lines are not added into the totals.",
 	dates = "Pick a day to see the lines pinned to it. A mark in front of a day means the log only gave a month or a year.",
-	export = "Click the box and press Ctrl+C. Signed copper and counts are negative when something left the bank. Moves and summaries are zero in the signed columns.",
+	export = "Click the box and press Ctrl+C. Import pastes a transaction export into the guild you are viewing. Lines already saved stay as they are.",
 	settings = "Each guild keeps its own ledger on this account. Other accounts do not see it.",
 }
 
@@ -724,10 +724,12 @@ local function buildExport(parent)
 	characters:SetPoint("LEFT", transactions, "RIGHT", 6, 0)
 	local items = Widgets.Button(parent, "Items", 80, 22)
 	items:SetPoint("LEFT", characters, "RIGHT", 6, 0)
+	local import = Widgets.Button(parent, "Import", 80, 22)
+	import:SetPoint("TOPRIGHT", 0, 0)
 	local note = Widgets.Label(parent, "small", Theme.muted)
 	note:SetPoint("LEFT", items, "RIGHT", 10, 0)
-	note:SetPoint("RIGHT", 0, 0)
-	note:SetText("Choose what to copy.")
+	note:SetPoint("RIGHT", import, "LEFT", -10, 0)
+	note:SetText("Copy a list, or paste transactions and press Import.")
 
 	local scroll = CreateFrame("ScrollFrame", "GBLFExportScroll", parent, "UIPanelScrollFrameTemplate")
 	scroll:SetPoint("TOPLEFT", 0, -32)
@@ -790,6 +792,57 @@ local function buildExport(parent)
 	end
 	items.onClick = function()
 		fill("items")
+	end
+
+	local function lineCount(count)
+		if count == 1 then
+			return "1 line"
+		end
+		return string.format("%d lines", count)
+	end
+
+	import.onClick = function()
+		local text = edit:GetText() or ""
+		edit:ClearFocus()
+		local key, guild = GBLF.ViewGuild()
+		local fresh = false
+		if not guild then
+			local playerKey, name, realm = GBLF.PlayerGuild()
+			if not key or playerKey ~= key or not name then
+				note:SetText("Open this guild's bank once, or pick a saved guild, then import.")
+				return
+			end
+			guild = GBLF.Ledger.NewGuild(name, realm)
+			fresh = true
+		end
+		local added, seen, err = GBLF.Ledger.ImportTransactions(guild, text)
+		if not added then
+			note:SetText(err or "Import failed.")
+			return
+		end
+		if fresh then
+			GuildBankLedgerForeverDB.guilds[key] = guild
+		end
+		GBLF.Invalidate(key)
+		UI.Refresh()
+		local name = guild.name or key
+		local already = seen - added
+		local message
+		if added == 0 then
+			if seen == 1 then
+				message = string.format("No new lines for %s. That line was already saved.", name)
+			else
+				message = string.format("No new lines for %s. All %d lines were already saved.", name, seen)
+			end
+		elseif already == 0 then
+			message = string.format("Added %s to %s.", lineCount(added), name)
+		elseif already == 1 then
+			message = string.format("Added %s to %s. 1 line was already saved.", lineCount(added), name)
+		else
+			message = string.format("Added %s to %s. %d lines were already saved.", lineCount(added), name, already)
+		end
+		note:SetText(message)
+		GBLF.Print(message)
 	end
 
 	function page:Refresh()

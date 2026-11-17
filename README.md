@@ -30,6 +30,8 @@ Open the guild bank and press Scan, or type `/scan`. With the default settings t
 
 **Export** fills a box you can copy with Ctrl+C. Transactions, character totals, or item totals. More than 5,000 lines keeps the newest 5,000, oldest of those first.
 
+**Import** is on that same page. Paste a transaction export from the other computer and press Import. It adds those lines to the guild shown in the window. Lines already saved stay as they are, so the same export can be pasted again. An export from a different guild is refused. On a computer that has not scanned yet, log into that guild first. Character and item totals cannot be imported.
+
 **Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Delete removes that guild's ledger from this account.
 
 ## How the log is kept

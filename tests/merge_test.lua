@@ -38,6 +38,10 @@ y, m, d = Time.AddDays(2026, 1, 1, -1)
 eq(string.format("%04d-%02d-%02d", y, m, d), "2025-12-31", "year boundary")
 
 eq(Time.CivilToSerial(1970, 1, 1), 0, "unix epoch")
+eq(Time.ParseIso("2026-10-01"), Time.Pack(2026, 10, 1), "iso day")
+eq(Time.ParseIso("2024-02-29"), Time.Pack(2024, 2, 29), "iso leap day")
+eq(Time.ParseIso("2026-02-31"), nil, "iso rejects a day the month does not have")
+eq(Time.ParseIso("2026-10-1"), nil, "iso requires two digits")
 
 local scan = { year = 2026, month = 10, day = 1, hour = 0, min = 10 }
 local aged = Time.FromAge(scan, 0, 0, 0, 1)
@@ -263,6 +267,123 @@ local removed = Ledger.CollapseDuplicates(doubled)
 eq(removed, 1, "collapse drops the copied withdrawal")
 eq(#doubled.txns, 2, "the deposit stays beside one withdrawal")
 eq(doubled.txns[2].copper, 10000, "collapse keeps the other amount")
+
+local function countAction(guild, action)
+	local count = 0
+	for i = 1, #guild.txns do
+		if guild.txns[i].action == action then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+local copy = Ledger.NewGuild("OLYMPUS", "Realm")
+local added, seen, err = Ledger.ImportTransactions(copy, Ledger.ExportTransactions(books))
+eq(err, nil, "round trip has no error")
+eq(added, 8, "round trip adds every line")
+eq(seen, 8, "round trip sees every line")
+local imported = Ledger.Rebuild(copy)
+eq(imported.goldIn, 10000, "import does not count the summary")
+eq(imported.net, 6000, "imported net matches")
+eq(imported.itemIn, 20, "imported items in")
+eq(imported.itemOut, 5, "imported items out")
+eq(countAction(copy, "depositSummary"), 1, "one summary line")
+local summaryFlag = false
+for i = 1, #copy.txns do
+	if copy.txns[i].action == "depositSummary" then
+		summaryFlag = copy.txns[i].summary == true
+	end
+end
+eq(summaryFlag, true, "summary flag is restored")
+
+added, seen = Ledger.ImportTransactions(copy, Ledger.ExportTransactions(books))
+eq(added, 0, "a second import adds nothing")
+eq(seen, 8, "a second import still sees every line")
+eq(#copy.txns, 8, "a second import does not duplicate")
+eq(Ledger.Rebuild(copy).goldIn, 10000, "a second import does not double gold")
+
+local host = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(host, "money", {
+	line("Ada", "deposit", day, { copper = 10000 }),
+})
+added = Ledger.ImportTransactions(host, Ledger.ExportTransactions(books))
+eq(added, 7, "overlap imports only the missing lines")
+eq(Ledger.Rebuild(host).goldIn, 10000, "the overlapping deposit is not doubled")
+eq(#host.gaps, 0, "an overlapping import is not a gap")
+
+local quotedCopy = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.ImportTransactions(quotedCopy, Ledger.ExportTransactions(quoted))
+eq(added, 1, "quoted export imports")
+eq(quotedCopy.txns[1].who, 'Ada "Ace"', "quoted character survives")
+eq(quotedCopy.txns[1].itemName, "Linen, Cloth", "quoted item name survives")
+
+local commaGuild = Ledger.NewGuild("OLYMPUS, Inc", "Area 52")
+Ledger.MergeStream(commaGuild, "money", {
+	line("Ada", "deposit", day, { copper = 50, precision = "hour", hour = 15 }),
+})
+local commaCopy = Ledger.NewGuild("OLYMPUS, Inc", "Area 52")
+added = Ledger.ImportTransactions(commaCopy, Ledger.ExportTransactions(commaGuild))
+eq(added, 1, "a guild name with a comma imports")
+eq(commaCopy.txns[1].hour, 15, "hour survives import")
+eq(commaCopy.txns[1].precision, "hour", "hour precision survives import")
+
+local otherGuild = Ledger.NewGuild("Other", "Realm")
+local before = #otherGuild.txns
+added, seen, err = Ledger.ImportTransactions(otherGuild, Ledger.ExportTransactions(books))
+eq(added, nil, "a different guild is refused")
+eq(#otherGuild.txns, before, "a refused import writes nothing")
+eq(type(string.find(err, "OLYMPUS", 1, true)), "number", "the error names the export guild")
+
+before = #books.txns
+added, seen, err = Ledger.ImportTransactions(books, Ledger.ExportCharacters(Ledger.Rebuild(books)))
+eq(added, nil, "character totals are refused")
+eq(#books.txns, before, "character totals write nothing")
+
+local function joinRow(fields)
+	return table.concat(fields, ",")
+end
+
+local sample = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(sample, "money", {
+	line("Ada", "deposit", day, { copper = 10 }),
+})
+local sampleCsv = Ledger.ExportTransactions(sample)
+local goodLine = string.match(sampleCsv, "\n([^\n]+)$")
+local badLine = string.gsub(goodLine, "^%d%d%d%d%-%d%d%-%d%d", "2026-02-31", 1)
+local brokenGuild = Ledger.NewGuild("OLYMPUS", "Realm")
+added, seen, err = Ledger.ImportTransactions(brokenGuild, sampleCsv .. "\n" .. badLine)
+eq(added, nil, "a bad row imports nothing")
+eq(#brokenGuild.txns, 0, "a bad row does not keep earlier lines")
+eq(type(string.find(err, "Line 3", 1, true)), "number", "the error names the bad line")
+
+local crlfGuild = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.ImportTransactions(crlfGuild, string.gsub(sampleCsv, "\n", "\r\n"))
+eq(added, 1, "Windows line endings import")
+eq(crlfGuild.txns[1].copper, 10, "Windows copper is kept")
+
+local old = joinRow({
+	"day", "hour", "precision", "character", "action",
+	"item_id", "item_name", "count", "count_signed",
+	"copper", "copper_signed", "tab", "destination_tab", "stream",
+}) .. "\n" .. joinRow({
+	"2026-10-01", "", "day", "Ada", "deposit",
+	"", "", "1", "",
+	"40", "", "", "", "money",
+})
+local legacy = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.ImportTransactions(legacy, old)
+eq(added, 1, "an older export without a guild name imports")
+eq(legacy.txns[1].copper, 40, "legacy copper is kept")
+eq(legacy.txns[1].count, 1, "legacy count is kept")
+
+local twinsCopy = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.ImportTransactions(twinsCopy, Ledger.ExportTransactions(twins))
+eq(added, 4, "identical twins both import")
+eq(names(twinsCopy, "tab:1"), "A,A,B,C", "twin order survives import")
+added = Ledger.ImportTransactions(twinsCopy, Ledger.ExportTransactions(twins))
+eq(added, 0, "importing twins again adds nothing")
+eq(#twinsCopy.txns, 4, "twins stay two deposits")
 
 if failed > 0 then
 	io.stderr:write(string.format("%d failed\n", failed))

@@ -102,6 +102,24 @@ function Time.IsoDay(packed)
 	return string.format("%04d-%02d-%02d", year, month, day)
 end
 
+function Time.ParseIso(text)
+	local year, month, day = string.match(text or "", "^(%d%d%d%d)%-(%d%d)%-(%d%d)$")
+	if not year then
+		return nil
+	end
+	year = tonumber(year)
+	month = tonumber(month)
+	day = tonumber(day)
+	if month < 1 or month > 12 or day < 1 or day > 31 then
+		return nil
+	end
+	local backY, backM, backD = Time.SerialToCivil(Time.CivilToSerial(year, month, day))
+	if backY ~= year or backM ~= month or backD ~= day then
+		return nil
+	end
+	return Time.Pack(year, month, day)
+end
+
 -- scan: { year, month, day, hour, min }
 -- years/months/days/hours: age reported by the guild bank log.
 -- The coarsest non-zero unit wins. A line that says "3 days ago" does not

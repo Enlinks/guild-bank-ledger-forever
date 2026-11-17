@@ -437,6 +437,7 @@ function Ledger.ExportTransactions(guild, cap)
 			"day", "hour", "precision", "character", "action",
 			"item_id", "item_name", "count", "count_signed",
 			"copper", "copper_signed", "tab", "destination_tab", "stream",
+			"guild", "realm",
 		}),
 	}
 	local shown = 0
@@ -458,9 +459,319 @@ function Ledger.ExportTransactions(guild, cap)
 			csvEscape(txn.tab or ""),
 			csvEscape(txn.dest or ""),
 			csvEscape(txn.stream or ""),
+			csvEscape(guild.name or ""),
+			csvEscape(guild.realm or ""),
 		})
 	end
 	return table.concat(lines, "\n"), #guild.txns, shown
+end
+
+local IMPORT_COLUMNS = {
+	"day", "hour", "precision", "character", "action",
+	"item_id", "item_name", "count", "copper", "tab",
+	"destination_tab", "stream",
+}
+
+local IMPORT_ACTIONS = {
+	deposit = true,
+	withdraw = true,
+	withdrawal = true,
+	move = true,
+	repair = true,
+	buyTab = true,
+	withdrawForTab = true,
+	depositSummary = true,
+}
+
+local IMPORT_PRECISIONS = {
+	hour = true,
+	day = true,
+	month = true,
+	year = true,
+}
+
+local function trim(text)
+	return string.match(text or "", "^%s*(.-)%s*$") or ""
+end
+
+local function parseCsv(text)
+	if string.byte(text, 1) == 239 and string.byte(text, 2) == 187 and string.byte(text, 3) == 191 then
+		text = string.sub(text, 4)
+	end
+	text = string.gsub(text, "\r\n", "\n")
+	text = string.gsub(text, "\r", "\n")
+
+	local rows = {}
+	local row = {}
+	local field = {}
+	local quoted = false
+	local lineNo = 1
+	local rowLine = 1
+	local len = string.len(text)
+
+	local function pushField()
+		row[#row + 1] = table.concat(field)
+		field = {}
+	end
+
+	local function pushRow()
+		if not (#row == 1 and row[1] == "") then
+			if #row > 0 then
+				rows[#rows + 1] = { line = rowLine, fields = row }
+			end
+		end
+		row = {}
+	end
+
+	local i = 1
+	while i <= len do
+		local char = string.sub(text, i, i)
+		if quoted then
+			if char == '"' then
+				if string.sub(text, i + 1, i + 1) == '"' then
+					field[#field + 1] = '"'
+					i = i + 1
+				else
+					quoted = false
+				end
+			else
+				if char == "\n" then
+					lineNo = lineNo + 1
+				end
+				field[#field + 1] = char
+			end
+		elseif char == '"' and #field == 0 then
+			quoted = true
+		elseif char == "," then
+			pushField()
+		elseif char == "\n" then
+			pushField()
+			pushRow()
+			lineNo = lineNo + 1
+			rowLine = lineNo
+		else
+			field[#field + 1] = char
+		end
+		i = i + 1
+	end
+	if quoted then
+		return nil, "A quote is still open at the end of the text."
+	end
+	if #field > 0 or #row > 0 then
+		pushField()
+		pushRow()
+	end
+	return rows
+end
+
+local function cell(fields, index)
+	if not index then
+		return ""
+	end
+	return fields[index] or ""
+end
+
+local function parseWhole(text)
+	if text == "" then
+		return nil
+	end
+	if not string.match(text, "^%d+$") then
+		return nil, true
+	end
+	return tonumber(text)
+end
+
+local function guildLabel(name, realm)
+	if realm and realm ~= "" then
+		return (name or "") .. "-" .. realm
+	end
+	return name or ""
+end
+
+local function parseStream(text)
+	if text == "money" then
+		return "money"
+	end
+	local tab = string.match(text, "^tab:(%d+)$")
+	tab = tab and tonumber(tab)
+	if tab and tab > 0 then
+		return "tab:" .. tab
+	end
+	return nil
+end
+
+-- text is a transaction export. Lines already saved are left in place.
+-- An export that names another guild is refused, and nothing is written.
+-- Returns added, seen, err. On failure added is nil and the guild is unchanged.
+function Ledger.ImportTransactions(guild, text)
+	if type(guild) ~= "table" or type(guild.txns) ~= "table" then
+		return nil, nil, "There is no ledger to import into."
+	end
+	if type(text) ~= "string" or string.match(text, "^%s*$") then
+		return nil, nil, "Paste a transaction export first."
+	end
+
+	local rows, err = parseCsv(text)
+	if not rows then
+		return nil, nil, err
+	end
+	if #rows == 0 then
+		return nil, nil, "Paste a transaction export first."
+	end
+
+	local header = {}
+	local headerFields = rows[1].fields
+	for index = 1, #headerFields do
+		local name = string.lower(trim(headerFields[index]))
+		if name ~= "" and not header[name] then
+			header[name] = index
+		end
+	end
+	for index = 1, #IMPORT_COLUMNS do
+		if not header[IMPORT_COLUMNS[index]] then
+			return nil, nil, "Paste the Transactions export."
+		end
+	end
+	if #rows == 1 then
+		return nil, nil, "The export has no lines."
+	end
+
+	local records = {}
+	local fileName, fileRealm
+	for r = 2, #rows do
+		local source = rows[r]
+		local fields = source.fields
+		local function fail(message)
+			return string.format("Line %d %s", source.line, message)
+		end
+
+		local day = GBLF.Time.ParseIso(cell(fields, header.day))
+		if not day then
+			return nil, nil, fail("needs a day in the form YYYY-MM-DD.")
+		end
+
+		local hour, bad = parseWhole(cell(fields, header.hour))
+		if bad or (hour and hour > 23) then
+			return nil, nil, fail("has an hour that is not 0 to 23.")
+		end
+
+		local precision = cell(fields, header.precision)
+		if precision == "" then
+			precision = "day"
+		elseif not IMPORT_PRECISIONS[precision] then
+			return nil, nil, fail("has a precision this ledger does not keep.")
+		end
+
+		local action = cell(fields, header.action)
+		if action == "" then
+			return nil, nil, fail("needs an action.")
+		end
+		if not IMPORT_ACTIONS[action] then
+			return nil, nil, fail("has an action this ledger does not keep.")
+		end
+
+		local itemID
+		itemID, bad = parseWhole(cell(fields, header.item_id))
+		if bad or (itemID and itemID < 1) then
+			return nil, nil, fail("has an item id that is not a whole number.")
+		end
+
+		local count
+		count, bad = parseWhole(cell(fields, header.count))
+		if bad then
+			return nil, nil, fail("has a count that is not a whole number.")
+		end
+
+		local copper
+		copper, bad = parseWhole(cell(fields, header.copper))
+		if bad then
+			return nil, nil, fail("has a copper amount that is not a whole number.")
+		end
+
+		local tab
+		tab, bad = parseWhole(cell(fields, header.tab))
+		if bad or (tab and tab < 1) then
+			return nil, nil, fail("has a tab that is not a whole number.")
+		end
+
+		local dest
+		dest, bad = parseWhole(cell(fields, header.destination_tab))
+		if bad or (dest and dest < 1) then
+			return nil, nil, fail("has a destination tab that is not a whole number.")
+		end
+
+		local stream = parseStream(cell(fields, header.stream))
+		if not stream then
+			return nil, nil, fail("has a stream this ledger does not keep.")
+		end
+
+		local named = header.guild and cell(fields, header.guild) or ""
+		local realm = header.realm and cell(fields, header.realm) or ""
+		if named ~= "" or realm ~= "" then
+			if not fileName then
+				fileName = named
+				fileRealm = realm
+			elseif fileName ~= named or fileRealm ~= realm then
+				return nil, nil, "The export names more than one guild."
+			end
+		end
+
+		local who = cell(fields, header.character)
+		if who == "" then
+			who = nil
+		end
+		local itemName = cell(fields, header.item_name)
+		if itemName == "" then
+			itemName = nil
+		end
+
+		records[#records + 1] = {
+			stream = stream,
+			action = action,
+			who = who,
+			day = day,
+			hour = hour,
+			precision = precision,
+			itemID = itemID,
+			itemName = itemName,
+			count = count,
+			copper = copper,
+			tab = tab,
+			dest = dest,
+			summary = action == "depositSummary",
+		}
+	end
+
+	if fileName then
+		if fileName ~= (guild.name or "") or fileRealm ~= (guild.realm or "") then
+			return nil, nil, string.format(
+				"That export is for %s. This ledger is %s.",
+				guildLabel(fileName, fileRealm),
+				guildLabel(guild.name, guild.realm)
+			)
+		end
+	end
+
+	local byStream = {}
+	local order = {}
+	for index = 1, #records do
+		local record = records[index]
+		local list = byStream[record.stream]
+		if not list then
+			list = {}
+			byStream[record.stream] = list
+			order[#order + 1] = record.stream
+		end
+		list[#list + 1] = record
+	end
+
+	local added = 0
+	for index = 1, #order do
+		local stream = order[index]
+		local gained = Ledger.MergeStream(guild, stream, byStream[stream])
+		added = added + gained
+	end
+	return added, #records
 end
 
 function Ledger.ExportCharacters(cache)
