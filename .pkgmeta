@@ -1,0 +1,5 @@
+package-as: guild-bank-ledger-forever
+
+ignore:
+  - tests
+  - AGENTS.md

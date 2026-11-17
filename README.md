@@ -56,6 +56,22 @@ lua5.1 tests/merge_test.lua
 
 The test exits 0 when every check passes, and it prints nothing on success. Scan, the window, and saved variables still have to be tried in game.
 
+## Releasing
+
+CurseForge builds a zip when a tag is pushed. The `## Version` line in both TOC files has to match that tag.
+
+While the addon is in beta, use `0.MINOR.PATCH-beta`. A fix bumps the last number (`0.1.1-beta`). A feature bumps the middle number and resets the patch (`0.2.0-beta`).
+
+After the beta, use `YYYY.MINOR.PATCH`. `2026.1.0` is the first release. A feature bumps the middle number. A fix bumps the last number. The next year starts at `2027.1.0`.
+
+```sh
+git tag 0.1.0-beta
+git push origin main
+git push origin 0.1.0-beta
+```
+
+A tag whose name contains `beta` is filed as a beta. A tag whose name contains `alpha` is an alpha. Any other tag is a release. A push to `main` without a tag does not publish a file.
+
 ## License
 
 MIT. Copyright (c) 2026 Enlinks. See [LICENSE](LICENSE).
