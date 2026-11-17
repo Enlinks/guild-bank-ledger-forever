@@ -10,8 +10,6 @@ Copy this folder to:
 
 The folder name has to be `guild-bank-ledger-forever`, the same name as the TOC file. Log in, and the minimap coin button opens the window.
 
-The client this was written for is Forever beta, interface `16001` (game 1.60.1). Saved variables on builds older than 70009 were unreliable. If a scan looks fine and then vanishes on relog, the client did not write the save file.
-
 ## Use
 
 Open the guild bank and press Scan, or type `/scan`. With the default settings the addon scans when the bank opens, then again every 2 minutes while it stays open.
