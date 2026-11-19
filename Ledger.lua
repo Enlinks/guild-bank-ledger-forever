@@ -59,8 +59,19 @@ local function canonicalAction(action)
 	return action
 end
 
+local function tabPurchase(action)
+	action = canonicalAction(action)
+	return action == "buyTab" or action == "withdrawForTab"
+end
+
 local function sameLine(a, b)
-	if canonicalAction(a.action) ~= canonicalAction(b.action) or a.who ~= b.who then
+	local actionA = canonicalAction(a.action)
+	local actionB = canonicalAction(b.action)
+	-- The money log lists one tab purchase under both names.
+	if actionA ~= actionB and not (tabPurchase(actionA) and tabPurchase(actionB)) then
+		return false
+	end
+	if a.who ~= b.who then
 		return false
 	end
 	if a.count ~= b.count or a.copper ~= b.copper then
@@ -180,10 +191,49 @@ local function prependRows(guild, stream, rows)
 	end
 end
 
+-- One tab purchase can arrive as buyTab and withdrawForTab, or as the same
+-- buyTab twice. Keep one line, and keep the buyTab name when both are present.
+-- Two withdrawals of the same amount stay as two lines.
+local function omitDuplicateTabPurchases(rows)
+	local kept = {}
+	for i = 1, #rows do
+		local row = rows[i]
+		if tabPurchase(row.action) then
+			local match
+			for j = 1, #kept do
+				if tabPurchase(kept[j].action) and kept[j].stream == row.stream and sameEvent(row, kept[j]) then
+					match = j
+					break
+				end
+			end
+			if match then
+				if canonicalAction(row.action) == "buyTab" then
+					kept[match].action = "buyTab"
+				end
+			else
+				kept[#kept + 1] = row
+			end
+		else
+			kept[#kept + 1] = row
+		end
+	end
+	return kept
+end
+
+function Ledger.CollapseTabPairs(guild)
+	local before = #guild.txns
+	guild.txns = omitDuplicateTabPurchases(guild.txns)
+	return before - #guild.txns
+end
+
 -- incoming is oldest-first. Returns how many lines were added, and whether
 -- this read missed the previous tail (the log rolled past between scans).
 function Ledger.MergeStream(guild, stream, incoming)
 	if not incoming or #incoming == 0 then
+		return 0, false
+	end
+	incoming = omitDuplicateTabPurchases(incoming)
+	if #incoming == 0 then
 		return 0, false
 	end
 

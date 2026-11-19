@@ -62,6 +62,11 @@ function GBLF.InitDB()
 					GBLF.Print("Removed " .. removed .. " duplicated lines from " .. (guild.name or key) .. ".")
 				end
 			end
+			local paired = GBLF.Ledger.CollapseTabPairs(guild)
+			if paired > 0 then
+				local noun = paired == 1 and "tab purchase" or "tab purchases"
+				GBLF.Print("Removed " .. paired .. " duplicated " .. noun .. " from " .. (guild.name or key) .. ".")
+			end
 		end
 	end
 	GBLF.caches = {}

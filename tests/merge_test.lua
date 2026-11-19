@@ -385,6 +385,46 @@ added = Ledger.ImportTransactions(twinsCopy, Ledger.ExportTransactions(twins))
 eq(added, 0, "importing twins again adds nothing")
 eq(#twinsCopy.txns, 4, "twins stay two deposits")
 
+local tabBuy = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.MergeStream(tabBuy, "money", {
+	line("Ada", "withdrawForTab", day, { copper = 10000000 }),
+	line("Ada", "buyTab", day, { copper = 10000000 }),
+	line("Ada", "withdraw", day, { copper = 10000000 }),
+})
+eq(added, 2, "a tab purchase and a real withdrawal are both kept")
+eq(#tabBuy.txns, 2, "the paired tab withdrawal is not stored")
+eq(tabBuy.txns[1].action, "buyTab", "the purchase name is kept")
+local tabCache = Ledger.Rebuild(tabBuy)
+eq(tabCache.tabCost, 10000000, "the tab is counted once")
+eq(tabCache.goldOut, 20000000, "the real withdrawal is still out")
+
+added = Ledger.MergeStream(tabBuy, "money", {
+	line("Ada", "withdrawForTab", day, { copper = 10000000 }),
+	line("Ada", "buyTab", day, { copper = 10000000 }),
+})
+eq(added, 0, "a later scan does not store the tab purchase again")
+eq(#tabBuy.txns, 2, "the tab purchase stays one line")
+
+local secondTab = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.MergeStream(secondTab, "money", {
+	line("Ada", "buyTab", day, { copper = 10000000 }),
+	line("Ada", "buyTab", day, { copper = 25000000 }),
+})
+eq(added, 2, "two tab prices are two purchases")
+eq(Ledger.Rebuild(secondTab).tabCost, 35000000, "both tab prices count")
+
+local savedPair = Ledger.NewGuild("OLYMPUS", "Realm")
+savedPair.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "withdrawForTab", who = "Ada", day = day, precision = "day", copper = 10000000 },
+	{ id = 2, ord = 2, stream = "money", action = "buyTab", who = "Ada", day = day, precision = "day", copper = 10000000 },
+	{ id = 3, ord = 3, stream = "money", action = "withdraw", who = "Ada", day = day, precision = "day", copper = 500 },
+}
+local paired = Ledger.CollapseTabPairs(savedPair)
+eq(paired, 1, "a saved pair drops one line")
+eq(#savedPair.txns, 2, "the withdrawal beside the tab stays")
+eq(savedPair.txns[1].action, "buyTab", "the saved line keeps the purchase name")
+eq(Ledger.Rebuild(savedPair).tabCost, 10000000, "a repaired ledger counts the tab once")
+
 if failed > 0 then
 	io.stderr:write(string.format("%d failed\n", failed))
 	os.exit(1)

@@ -19,7 +19,7 @@ Ledgers live in `GuildBankLedgerForeverDB`, one entry per `GuildName-Realm`. A f
 
 Closing the bank aborts a scan that has not finished, and those captured lines are discarded. Tab names can be saved during the scan, before the lines are merged.
 
-Out includes withdrawals and tab purchases. Repairs stay separate. Moves and deposit summaries are listed and left out of the totals. The day is fixed the first time a line is seen.
+Out includes withdrawals and tab purchases. A tab purchase the log reports twice is stored once. Repairs stay separate. Moves and deposit summaries are listed and left out of the totals. The day is fixed the first time a line is seen.
 
 ## Checks
 

@@ -40,7 +40,7 @@ The game usually says "3 days ago", not the hour. The day is stored the first ti
 
 If a later scan does not overlap the previous tail, the log rolled past between visits. Those missing lines cannot be recovered. The ledger records a gap and keeps going. Leaving the bank open, with the rescan timer on, is what keeps a busy tab complete.
 
-Moves are stored once, on the tab they left, and are not counted in item totals. A deposit summary repeats gold that the individual lines already count, so it is listed and left out of the totals. Out includes withdrawals and tab purchases. Repairs stay separate. Net is gold in, minus gold out, minus repairs.
+Moves are stored once, on the tab they left, and are not counted in item totals. A deposit summary repeats gold that the individual lines already count, so it is listed and left out of the totals. A tab purchase is stored once. The log can list that same gold as a purchase and as a withdrawal for the tab. Out includes withdrawals and tab purchases. Repairs stay separate. Net is gold in, minus gold out, minus repairs.
 
 Guilds are stored apart, under `GuildName-Realm`. The window follows your current guild until you pick another saved guild in Settings. There is no sync between accounts. Characters on the same WoW account share one save.
 
