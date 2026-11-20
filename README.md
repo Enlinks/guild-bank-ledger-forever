@@ -26,13 +26,21 @@ Open the guild bank and press Scan, or type `/scan`. With the default settings t
 
 `/scan` is a short command. Another addon can claim it.
 
-**Ledger** is the main view. The strip across the top is the guild total. The list under it is each character, or each item. Click a name or an item to filter the lines on the right.
+### Ledger
 
-**Dates** is the same ledger, one day at a time.
+The main view. The strip across the top is the guild total. The list under it is each character, or each item. Click a name or an item to filter the lines on the right.
 
-**Export** fills a box you can copy with Ctrl+C. Opening that tab clears the box. Press Transactions, Characters, or Items for the guild you are viewing. More than 5,000 lines keeps the newest 5,000, oldest of those first.
+### Dates
 
-**Import** is on that same page as **Export**. Press Transactions once and copy the header row. Under it, paste only the lines you want to add, then press Import. The whole log can be pasted again. Lines already saved stay as they are.
+The same ledger, one day at a time.
+
+### Export
+
+This tab fills a box you can copy with Ctrl+C. Opening it clears the box. Press Transactions, Characters, or Items for the guild you are viewing. More than 5,000 lines keeps the newest 5,000, oldest of those first.
+
+#### Import
+
+A button on the Export page. Press Transactions once and copy the header row. Under it, paste only the lines you want to add, then press Import. The whole log can be pasted again. Lines already saved stay as they are.
 
 The lines join the guild open in the window. Leave `guild` and `realm` blank. Those cells are not stored on the line. The next Transactions export fills them from that guild. If you do fill them in, every row has to name that same guild, and it has to be the guild on screen. The realm is the game realm with the spaces removed. Log into that guild on this account once before the first import. Every line needs a character. A blank name is refused, and nothing from that paste is saved. Character totals and item totals cannot be imported.
 
@@ -58,7 +66,21 @@ A line with the same person, action, and amount on the same day is kept as that 
 
 A deposit summary is listed and left out of the totals. A move is listed and left out of the item totals. `withdrawForTab` counts as gold out and as a tab purchase.
 
-**Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Click a guild to view it. Backup this ledger saves a copy of that guild. The copy keeps the guild name. Its realm is `backup-` plus the date and time, down to the second, such as `backup-2026-11-20-14:05:09`. A second backup in the same second gets a number on the end. Merge into this one folds another saved ledger into the guild you are viewing. To put the older lines back, choose the short ledger, the one with no realm. Leave "Delete the other ledger" unchecked until the lines look right. That box starts unchecked, so both ledgers stay. A repeated amount on another day is kept. The name and realm you are viewing stay as they are. Delete removes the ledger you are viewing from this account.
+### Settings
+
+This tab holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Click a guild to view it. Watch my current guild shows the guild this character is in.
+
+#### Backup this ledger
+
+Saves a copy of the guild you are viewing. The copy keeps the guild name. Its realm is `backup-` plus the date and time, down to the second, such as `backup-2026-11-20-14:05:09`. A second backup in the same second gets a number on the end.
+
+#### Merge into this one
+
+Folds another saved ledger into the guild you are viewing. To put the older lines back, choose the short ledger, the one with no realm. Leave "Delete the other ledger" unchecked until the lines look right. That box starts unchecked, so both ledgers stay. A repeated amount on another day is kept. The name and realm you are viewing stay as they are.
+
+#### Delete this ledger
+
+Removes the ledger you are viewing from this account.
 
 ## How the log is kept
 
