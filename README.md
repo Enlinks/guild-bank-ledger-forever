@@ -44,7 +44,7 @@ A button on the Export page. Press Transactions once and copy the header row. Un
 
 The lines join the guild open in the window. Leave `guild` and `realm` blank. Those cells are not stored on the line. The next Transactions export fills them from that guild. If you do fill them in, every row has to name that same guild, and it has to be the guild on screen. The realm is the game realm with the spaces removed. Log into that guild on this account once before the first import. Every line needs a character. A blank name is refused, and nothing from that paste is saved. Character totals and item totals cannot be imported.
 
-A line with the same person, action, and amount on the same day is kept as that saved line. The same amount on another day is added.
+A line with the same person, action, and amount on the same day is kept as that saved line. The same amount on another day is added. A later reading with no time does not replace a saved line that has a clock.
 
 | Column | Allowed values |
 | --- | --- |
@@ -76,7 +76,7 @@ Saves a copy of the guild you are viewing. The copy keeps the guild name. Its re
 
 #### Merge into this one
 
-Folds another saved ledger into the guild you are viewing. To put the older lines back, choose the short ledger, the one with no realm. Leave "Delete the other ledger" unchecked until the lines look right. That box starts unchecked, so both ledgers stay. A repeated amount on another day is kept. The name and realm you are viewing stay as they are.
+Folds another saved ledger into the guild you are viewing. To put the older lines back, choose the short ledger, the one with no realm. Leave "Delete the other ledger" unchecked until the lines look right. That box starts unchecked, so both ledgers stay. A repeated amount on another day is kept. When one line has a clock and the other has only a date, the clock stays. The name and realm you are viewing stay as they are.
 
 #### Delete this ledger
 

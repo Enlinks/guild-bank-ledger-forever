@@ -129,6 +129,53 @@ local function sameEvent(a, b)
 	return true
 end
 
+-- Signed calendar days, a minus b. Packed dates are not day counts.
+local function signedDays(a, b)
+	local ay, am, ad = GBLF.Time.Unpack(a.day)
+	local by, bm, bd = GBLF.Time.Unpack(b.day)
+	return GBLF.Time.CivilToSerial(ay, am, ad) - GBLF.Time.CivilToSerial(by, bm, bd)
+end
+
+-- 23:00 read again as 00:00 the next day. Two evening deposits a day apart
+-- are not this case.
+local function crossedMidnight(a, b)
+	if not (hasClock(a) and hasClock(b) and sameLine(a, b)) then
+		return false
+	end
+	local delta = signedDays(a, b)
+	local early, late
+	if delta == -1 then
+		early, late = a, b
+	elseif delta == 1 then
+		early, late = b, a
+	else
+		return false
+	end
+	return (late.hour + 24 - early.hour) <= 2
+end
+
+-- A date-only line on the timed day, or the next day, after the hour is gone.
+local function dateShadow(a, b)
+	local timed, dated
+	if hasClock(a) and isDateOnly(b) then
+		timed, dated = a, b
+	elseif hasClock(b) and isDateOnly(a) then
+		timed, dated = b, a
+	else
+		return false
+	end
+	if not sameLine(timed, dated) then
+		return false
+	end
+	local delta = signedDays(dated, timed)
+	return delta == 0 or delta == 1
+end
+
+-- The same deposit for a merge and for a scan. A later day stays its own line.
+local function sameDeposit(a, b)
+	return sameEvent(a, b) or crossedMidnight(a, b) or dateShadow(a, b)
+end
+
 -- A timed line is preferred over a date-only line of the same event.
 -- Upgrading a date-only row is allowed only when no timed row already covers
 -- it, so a second timed withdrawal is not written onto the first one's copy.
@@ -151,8 +198,20 @@ local function findUnused(stored, used, row)
 				return nil
 			end
 		end
+		return datedIndex
 	end
-	return datedIndex
+	local shadowIndex = nil
+	for i = 1, #stored do
+		if not used[i] and (dateShadow(stored[i], row) or crossedMidnight(stored[i], row)) then
+			if hasClock(stored[i]) or not hasClock(row) then
+				return i
+			end
+			if not shadowIndex then
+				shadowIndex = i
+			end
+		end
+	end
+	return shadowIndex
 end
 
 local function takeClock(stored, incoming)
@@ -474,7 +533,7 @@ function Ledger.PreferTimestamps(guild)
 		for a = 1, #rows do
 			if isDateOnly(rows[a]) and not drop[rows[a]] then
 				for b = 1, #rows do
-					if hasClock(rows[b]) and sameEvent(rows[b], rows[a]) then
+					if hasClock(rows[b]) and (sameEvent(rows[b], rows[a]) or dateShadow(rows[b], rows[a])) then
 						drop[rows[a]] = true
 						break
 					end
@@ -514,29 +573,32 @@ local function findByNeighbors(stored, used, incoming, i)
 	return nil
 end
 
-local function sameLineAny(stored, row)
+local function sameDepositAny(stored, row)
 	for i = 1, #stored do
-		if sameLine(stored[i], row) then
+		if sameDeposit(stored[i], row) then
 			return true
 		end
 	end
 	return false
 end
 
-local function sameEventAny(stored, row)
+-- A timed reading upgrades a date-only line of that same deposit.
+local function rememberClock(stored, row)
+	if not hasClock(row) then
+		return
+	end
 	for i = 1, #stored do
-		if sameEvent(stored[i], row) then
-			return true
+		if not hasClock(stored[i]) and dateShadow(stored[i], row) then
+			takeClock(stored[i], row)
+			return
 		end
 	end
-	return false
 end
 
 -- incoming is oldest-first. Returns how many lines were added, and whether
 -- this read missed the previous tail (the log rolled past between scans).
--- fromSaved is a ledger or an import. A scan still skips a line above the
--- overlap when the person and amount already appear. A saved ledger skips
--- that line only when it is the same event.
+-- A scan and a saved ledger use the same deposit check. fromSaved stays so
+-- both callers share this function.
 function Ledger.MergeStream(guild, stream, incoming, fromSaved)
 	if not incoming or #incoming == 0 then
 		return 0, false
@@ -608,23 +670,27 @@ function Ledger.MergeStream(guild, stream, incoming, fromSaved)
 	end
 
 	-- A saved line the scan did not use, sitting between two lines it did
-	-- recognize, is an extra copy when it repeats one of those lines.
-	-- The same applies past the last recognized line when the scan has
-	-- moved on. Lines before the overlap have scrolled off and stay.
-	-- An identical line sitting directly beside its match stays: one read
-	-- can hold two real deposits of the same amount.
+	-- recognize, is an extra copy when it is the same deposit. The same
+	-- applies past the last recognized line when the scan has moved on.
+	-- Lines before the overlap have scrolled off and stay. An identical
+	-- line sitting directly beside its match stays. The line with a clock
+	-- wins over the date-only copy.
+	local covered = {}
 	local function repeatCopy(j)
 		if used[j] then
 			return false
 		end
 		for u = 1, #stored do
-			if used[u] and sameLine(stored[u], stored[j]) and math.abs(u - j) > 1 then
+			if used[u] and math.abs(u - j) > 1 and sameDeposit(stored[u], stored[j]) then
+				if hasClock(stored[j]) and not hasClock(stored[u]) then
+					covered[stored[u]] = true
+					return false
+				end
 				return true
 			end
 		end
 		return false
 	end
-	local covered = {}
 	if firstJ and lastJ then
 		for j = firstJ + 1, lastJ - 1 do
 			if repeatCopy(j) then
@@ -656,18 +722,15 @@ function Ledger.MergeStream(guild, stream, incoming, fromSaved)
 		if partner[i] then
 			seen = true
 		elseif not seen then
-			-- The log is cut off above this line. A drifted re-read of a line
-			-- already saved is not stored again. A line we have never saved is.
-			-- A saved ledger can hold the same amount on another day.
-			local already
-			if fromSaved then
-				already = sameEventAny(stored, incoming[i])
+			-- Above the overlap. The same deposit is not stored again.
+			-- A different day is. A timed line fills in a date-only copy.
+			if sameDepositAny(stored, incoming[i]) then
+				rememberClock(stored, incoming[i])
 			else
-				already = sameLineAny(stored, incoming[i])
-			end
-			if not already then
 				older[#older + 1] = incoming[i]
 			end
+		elseif sameDepositAny(stored, incoming[i]) then
+			rememberClock(stored, incoming[i])
 		else
 			newer[#newer + 1] = incoming[i]
 		end

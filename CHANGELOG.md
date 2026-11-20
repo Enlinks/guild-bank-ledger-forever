@@ -6,6 +6,19 @@ Backup this ledger saves a copy. The copy keeps the guild name, and its realm is
 
 A recent game update left the realm name blank and started a second ledger. The older lines stay saved. The addon does not merge them on its own. On login, and on the Settings page, it says to back up the ledger you want to keep and then use Merge into this one.
 
+Open caveats. This release did not close them.
+
+| Identifier | Found in | Resolved in | Description |
+| --- | --- | --- | --- |
+| [#8](https://github.com/Enlinks/guild-bank-ledger-forever/issues/8) | 0.2.0-beta | open | A rescan drops lines a merge kept, including an older deposit and a line that still has a clock. |
+
+**#8 A rescan drops lines the merge just kept**
+
+- **Symptom:** Merging the older ledger keeps lines that a later scan removes. One of them is a 25s deposit on Nov 15. The scan can also replace a line that has a clock with a later line that has only a date.
+- **Conditions:** Seen in 0.2.0-beta. The guild bank log no longer shows the older line. The scan treated the same person and amount as one deposit and ignored the day.
+- **Workaround:** Keep the backup made before the scan. Merge it again after updating, and leave Delete the other ledger unchecked.
+- **Resolution:** Not in a release yet. A scan and a merge use the same deposit check. The line with a clock is kept. A deposit on another day stays.
+
 Resolved caveats. These were present in 0.1.3-beta and are fixed in 0.2.0-beta.
 
 | Identifier | Affected release | Resolved in | Description |

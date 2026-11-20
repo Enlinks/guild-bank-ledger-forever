@@ -859,6 +859,7 @@ merged, seen = Ledger.MergeGuild(keeper, keeper)
 eq(merged, nil, "a ledger is not merged into itself")
 
 local nov9 = Time.Pack(2026, 11, 9)
+local nov15 = Time.Pack(2026, 11, 15)
 local nov17 = Time.Pack(2026, 11, 17)
 local nov18 = Time.Pack(2026, 11, 18)
 local nov19 = Time.Pack(2026, 11, 19)
@@ -913,8 +914,58 @@ added = Ledger.MergeStream(scanGuild, "money", {
 	line("Mira", "deposit", nov9, { copper = 10000, hour = 12, precision = "hour" }),
 	line("Mira", "deposit", nov17, { copper = 10000, hour = 13, precision = "hour" }),
 })
-eq(added, 0, "a scan still skips an older line with the same amount")
-eq(#scanGuild.txns, 1, "the scan keeps the line it already saved")
+eq(added, 1, "a scan keeps an older deposit of the same amount")
+eq(#scanGuild.txns, 2, "the older day stays beside the later one")
+eq(scanGuild.txns[1].day, nov9, "the older deposit keeps its day")
+
+local rescanned = Ledger.NewGuild("OLYMPUS", "Realm")
+rescanned.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "deposit", who = "Ada", day = nov19, precision = "hour", hour = 8, copper = 100 },
+	{ id = 2, ord = 2, stream = "money", action = "deposit", who = "Pia", day = nov19, precision = "hour", hour = 23, copper = 2500 },
+	{ id = 3, ord = 3, stream = "money", action = "deposit", who = "Quin", day = nov19, precision = "day", copper = 50000 },
+	{ id = 4, ord = 4, stream = "money", action = "deposit", who = "Bob", day = nov20, precision = "hour", hour = 9, copper = 200 },
+	{ id = 5, ord = 5, stream = "tab:1", action = "deposit", who = "Opal", day = nov19, precision = "hour", hour = 21, itemID = 1, itemName = "Page 10", count = 1, tab = 1 },
+	{ id = 6, ord = 6, stream = "money", action = "deposit", who = "Pia", day = nov15, precision = "day", copper = 2500 },
+	{ id = 7, ord = 7, stream = "money", action = "deposit", who = "Quin", day = nov18, precision = "hour", hour = 23, copper = 50000 },
+	{ id = 8, ord = 8, stream = "tab:1", action = "deposit", who = "Opal", day = nov18, precision = "hour", hour = 22, itemID = 1, itemName = "Page 10", count = 1, tab = 1 },
+}
+added = Ledger.MergeStream(rescanned, "money", {
+	line("Ada", "deposit", nov19, { copper = 100, hour = 8, precision = "hour" }),
+	line("Pia", "deposit", nov19, { copper = 2500, hour = 23, precision = "hour" }),
+	line("Quin", "deposit", nov19, { copper = 50000, precision = "day" }),
+	line("Bob", "deposit", nov20, { copper = 200, hour = 9, precision = "hour" }),
+	line("Ren", "deposit", nov20, { copper = 300, hour = 15, precision = "hour" }),
+})
+added = added + Ledger.MergeStream(rescanned, "tab:1", {
+	line("Opal", "deposit", nov19, { itemID = 1, itemName = "Page 10", count = 1, tab = 1, hour = 21, precision = "hour" }),
+	line("Ren", "deposit", nov20, { itemID = 2, itemName = "Pattern", count = 1, tab = 1, hour = 15, precision = "hour" }),
+})
+local piaDays = 0
+local quinClock = 0
+local quinDate = 0
+local opalDays = 0
+local ren = 0
+for i = 1, #rescanned.txns do
+	local row = rescanned.txns[i]
+	if row.who == "Pia" and row.copper == 2500 then
+		piaDays = piaDays + 1
+	elseif row.who == "Quin" and row.hour == 23 then
+		quinClock = quinClock + 1
+		eq(row.day, nov18, "Quin keeps the day that had a clock")
+	elseif row.who == "Quin" then
+		quinDate = quinDate + 1
+	elseif row.who == "Opal" then
+		opalDays = opalDays + 1
+	elseif row.who == "Ren" then
+		ren = ren + 1
+	end
+end
+eq(added, 2, "the scan adds only the new lines")
+eq(piaDays, 2, "Pia's older deposit stays beside the later one")
+eq(quinClock, 1, "the timed Quin line stays")
+eq(quinDate, 0, "the date-only Quin copy is dropped")
+eq(opalDays, 2, "Opal's next-day trip stays")
+eq(ren, 2, "a new money line and a new item line are kept")
 
 CreateFrame = function()
 	return {
