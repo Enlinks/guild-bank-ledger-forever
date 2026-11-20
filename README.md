@@ -54,7 +54,7 @@ A line with the same person, action, and amount as one already saved is kept as 
 
 A deposit summary is listed and left out of the totals. A move is listed and left out of the item totals. `withdrawForTab` counts as gold out and as a tab purchase.
 
-**Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Click a guild to view it. Backup this ledger saves a copy. The copy keeps the guild name, and its realm is `backup-` plus the date and time, down to the second, such as `backup-2026-11-20-14:05:09`. Two backups in the same second get a number on the end. Merge into this one folds another saved ledger into the guild you are viewing and keeps both, so you can compare them. The pop-up has a box you can check to delete the other ledger. That box starts unchecked. The name and realm you are viewing stay as they are. Nothing is merged on its own. Delete removes the ledger you are viewing from this account.
+**Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Click a guild to view it. Backup this ledger saves a copy. The copy keeps the guild name, and its realm is `backup-` plus the date and time, down to the second, such as `backup-2026-11-20-14:05:09`. Two backups in the same second get a number on the end. Merge into this one folds another saved ledger into the guild you are viewing and keeps both, so you can compare them. A repeated amount on another day is kept. The pop-up has a box you can check to delete the other ledger. That box starts unchecked. The name and realm you are viewing stay as they are. Nothing is merged on its own. Delete removes the ledger you are viewing from this account.
 
 ## How the log is kept
 

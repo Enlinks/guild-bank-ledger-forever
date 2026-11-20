@@ -858,6 +858,64 @@ eq(keeper.txns[1].copper, 100, "editing a backup leaves the original")
 merged, seen = Ledger.MergeGuild(keeper, keeper)
 eq(merged, nil, "a ledger is not merged into itself")
 
+local nov9 = Time.Pack(2026, 11, 9)
+local nov17 = Time.Pack(2026, 11, 17)
+local nov18 = Time.Pack(2026, 11, 18)
+local nov19 = Time.Pack(2026, 11, 19)
+local nov20 = Time.Pack(2026, 11, 20)
+local recent = Ledger.NewGuild("Guild", "")
+Ledger.MergeStream(recent, "money", {
+	line("Mira", "deposit", nov17, { copper = 10000, hour = 13, precision = "hour" }),
+	line("Nia", "deposit", nov20, { copper = 10000, hour = 2, precision = "hour" }),
+})
+Ledger.MergeStream(recent, "tab:1", {
+	line("Opal", "deposit", nov19, { itemID = 1, itemName = "Page 10", count = 1, tab = 1, hour = 21, precision = "hour" }),
+})
+local olderLedger = Ledger.NewGuild("Guild", "Realm")
+Ledger.MergeStream(olderLedger, "money", {
+	line("Mira", "deposit", nov9, { copper = 10000, hour = 12, precision = "hour" }),
+	line("Mira", "deposit", nov17, { copper = 10000, hour = 13, precision = "hour" }),
+	line("Nia", "deposit", nov20, { copper = 10000, hour = 3, precision = "hour" }),
+})
+Ledger.MergeStream(olderLedger, "tab:1", {
+	line("Opal", "deposit", nov18, { itemID = 2, itemName = "Page 27", count = 2, tab = 1, hour = 22, precision = "hour" }),
+	line("Opal", "deposit", nov18, { itemID = 1, itemName = "Page 10", count = 1, tab = 1, hour = 22, precision = "hour" }),
+	line("Opal", "deposit", nov19, { itemID = 1, itemName = "Page 10", count = 1, tab = 1, hour = 21, precision = "hour" }),
+})
+merged = Ledger.MergeGuild(recent, olderLedger)
+eq(merged, 3, "an older amount on another day is imported")
+local miraDays = {}
+local nia = 0
+local page10 = 0
+local page27 = 0
+for i = 1, #recent.txns do
+	local row = recent.txns[i]
+	if row.who == "Mira" and row.copper == 10000 then
+		miraDays[#miraDays + 1] = row.day
+	elseif row.who == "Nia" then
+		nia = nia + 1
+	elseif row.itemName == "Page 10" then
+		page10 = page10 + 1
+	elseif row.itemName == "Page 27" then
+		page27 = page27 + 1
+	end
+end
+eq(#miraDays, 2, "both Mira deposits stay")
+eq(miraDays[1] == nov9 or miraDays[2] == nov9, true, "the earlier Mira deposit is kept")
+eq(nia, 1, "the same deposit an hour later is not a second line")
+eq(page10, 2, "page 10 on the next day is a second deposit")
+eq(page27, 1, "the rest of the earlier trip is kept")
+local scanGuild = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(scanGuild, "money", {
+	line("Mira", "deposit", nov17, { copper = 10000, hour = 13, precision = "hour" }),
+})
+added = Ledger.MergeStream(scanGuild, "money", {
+	line("Mira", "deposit", nov9, { copper = 10000, hour = 12, precision = "hour" }),
+	line("Mira", "deposit", nov17, { copper = 10000, hour = 13, precision = "hour" }),
+})
+eq(added, 0, "a scan still skips an older line with the same amount")
+eq(#scanGuild.txns, 1, "the scan keeps the line it already saved")
+
 CreateFrame = function()
 	return {
 		RegisterEvent = function() end,

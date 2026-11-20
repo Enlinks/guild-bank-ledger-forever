@@ -38,7 +38,7 @@ Do not claim an in-game check passed unless it was actually done. Say when a cha
 ## Boundaries
 
 - Import accepts a Transactions export, including a hand-written one. Guild and realm may be blank, and the guild open in the window receives the lines. Character is required. Lines already saved stay as they are, and an export that names another guild is refused. Character and item totals are not imported.
-- Two saved ledgers can be merged by hand from Settings. The ledger on screen keeps its name, realm, and key. The other ledger's lines are matched into it. Both ledgers stay unless the merge pop-up's checkbox is checked. Backup saves a copy whose realm is `backup-YYYY-MM-DD-HH:MM:SS`, using the guild name in the key. A second backup in that same second gets `-2` on the end. A blank realm does not retarget a scan or a watch onto an older key.
+- Two saved ledgers can be merged by hand from Settings. The ledger on screen keeps its name, realm, and key. The other ledger's lines are matched into it. An older line is kept when its day is different, even if the person and amount match a later line. Both ledgers stay unless the merge pop-up's checkbox is checked. Backup saves a copy whose realm is `backup-YYYY-MM-DD-HH:MM:SS`, using the guild name in the key. A second backup in that same second gets `-2` on the end. A blank realm does not retarget a scan or a watch onto an older key.
 - Release notes in `CHANGELOG.md` follow Cisco caveat style. A bug found in a shipped release is added to that release as an open caveat. When a later release fixes it, the earlier note stays and names the release that resolved it.
 - A transaction export keeps the newest 5,000 lines.
 - There is no sync between accounts. Characters on the same WoW account share one save.

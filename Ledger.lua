@@ -523,9 +523,21 @@ local function sameLineAny(stored, row)
 	return false
 end
 
+local function sameEventAny(stored, row)
+	for i = 1, #stored do
+		if sameEvent(stored[i], row) then
+			return true
+		end
+	end
+	return false
+end
+
 -- incoming is oldest-first. Returns how many lines were added, and whether
 -- this read missed the previous tail (the log rolled past between scans).
-function Ledger.MergeStream(guild, stream, incoming)
+-- fromSaved is a ledger or an import. A scan still skips a line above the
+-- overlap when the person and amount already appear. A saved ledger skips
+-- that line only when it is the same event.
+function Ledger.MergeStream(guild, stream, incoming, fromSaved)
 	if not incoming or #incoming == 0 then
 		return 0, false
 	end
@@ -646,7 +658,14 @@ function Ledger.MergeStream(guild, stream, incoming)
 		elseif not seen then
 			-- The log is cut off above this line. A drifted re-read of a line
 			-- already saved is not stored again. A line we have never saved is.
-			if not sameLineAny(stored, incoming[i]) then
+			-- A saved ledger can hold the same amount on another day.
+			local already
+			if fromSaved then
+				already = sameEventAny(stored, incoming[i])
+			else
+				already = sameLineAny(stored, incoming[i])
+			end
+			if not already then
 				older[#older + 1] = incoming[i]
 			end
 		else
@@ -735,7 +754,7 @@ function Ledger.MergeGuild(target, source)
 
 	local added = 0
 	for i = 1, #order do
-		local gained = Ledger.MergeStream(target, order[i], byStream[order[i]])
+		local gained = Ledger.MergeStream(target, order[i], byStream[order[i]], true)
 		added = added + (gained or 0)
 	end
 
@@ -1361,7 +1380,7 @@ function Ledger.ImportTransactions(guild, text)
 	local added = 0
 	for index = 1, #order do
 		local stream = order[index]
-		local gained = Ledger.MergeStream(guild, stream, byStream[stream])
+		local gained = Ledger.MergeStream(guild, stream, byStream[stream], true)
 		added = added + gained
 	end
 	return added, #records
