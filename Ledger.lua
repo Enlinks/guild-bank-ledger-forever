@@ -59,16 +59,10 @@ local function canonicalAction(action)
 	return action
 end
 
-local function tabPurchase(action)
-	action = canonicalAction(action)
-	return action == "buyTab" or action == "withdrawForTab"
-end
-
 local function sameLine(a, b)
 	local actionA = canonicalAction(a.action)
 	local actionB = canonicalAction(b.action)
-	-- The money log lists one tab purchase under both names.
-	if actionA ~= actionB and not (tabPurchase(actionA) and tabPurchase(actionB)) then
+	if actionA ~= actionB then
 		return false
 	end
 	if a.who ~= b.who then
@@ -191,39 +185,68 @@ local function prependRows(guild, stream, rows)
 	end
 end
 
--- One tab purchase can arrive as buyTab and withdrawForTab, or as the same
--- buyTab twice. Keep one line, and keep the buyTab name when both are present.
--- Two withdrawals of the same amount stay as two lines.
-local function omitDuplicateTabPurchases(rows)
+-- The money log writes a purchase notice ("purchased a guild bank tab") beside
+-- the withdrawal. The notice is not a second payment. Drop it. The next tab
+-- is a new amount, so this does not match on a fixed price. A notice with no
+-- withdrawal beside it is kept once, as the withdrawal, so gold already saved
+-- under that name is not thrown away.
+local function samePurse(a, b)
+	if a.who ~= b.who or a.copper ~= b.copper then
+		return false
+	end
+	if a.stream and b.stream and a.stream ~= b.stream then
+		return false
+	end
+	local ap = a.precision
+	local bp = b.precision
+	if ap == "year" or bp == "year" or ap == "month" or bp == "month" then
+		return timeOk(a, b)
+	end
+	return GBLF.Time.DayDistance(a.day, b.day) == 0
+end
+
+local function isTabWithdrawal(action)
+	action = canonicalAction(action)
+	return action == "withdraw" or action == "withdrawForTab"
+end
+
+local function dropBuyTabNotices(rows)
+	local withdrawals = {}
+	for i = 1, #rows do
+		if isTabWithdrawal(rows[i].action) then
+			withdrawals[#withdrawals + 1] = rows[i]
+		end
+	end
 	local kept = {}
+	local removed = 0
 	for i = 1, #rows do
 		local row = rows[i]
-		if tabPurchase(row.action) then
-			local match
-			for j = 1, #kept do
-				if tabPurchase(kept[j].action) and kept[j].stream == row.stream and sameEvent(row, kept[j]) then
-					match = j
+		if canonicalAction(row.action) ~= "buyTab" then
+			kept[#kept + 1] = row
+		else
+			local covered = false
+			for j = 1, #withdrawals do
+				if samePurse(row, withdrawals[j]) then
+					covered = true
 					break
 				end
 			end
-			if match then
-				if canonicalAction(row.action) == "buyTab" then
-					kept[match].action = "buyTab"
-				end
+			if covered then
+				removed = removed + 1
 			else
+				row.action = "withdrawForTab"
+				withdrawals[#withdrawals + 1] = row
 				kept[#kept + 1] = row
 			end
-		else
-			kept[#kept + 1] = row
 		end
 	end
-	return kept
+	return kept, removed
 end
 
 function Ledger.CollapseTabPairs(guild)
-	local before = #guild.txns
-	guild.txns = omitDuplicateTabPurchases(guild.txns)
-	return before - #guild.txns
+	local kept, removed = dropBuyTabNotices(guild.txns)
+	guild.txns = kept
+	return removed
 end
 
 -- incoming is oldest-first. Returns how many lines were added, and whether
@@ -232,7 +255,7 @@ function Ledger.MergeStream(guild, stream, incoming)
 	if not incoming or #incoming == 0 then
 		return 0, false
 	end
-	incoming = omitDuplicateTabPurchases(incoming)
+	incoming = dropBuyTabNotices(incoming)
 	if #incoming == 0 then
 		return 0, false
 	end

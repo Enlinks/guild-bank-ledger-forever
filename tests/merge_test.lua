@@ -205,6 +205,7 @@ local cache = Ledger.Rebuild(books)
 eq(cache.goldIn, 10000, "gold in")
 eq(cache.goldOut, 3500, "withdraw plus tab")
 eq(cache.tabCost, 1000, "tab subset")
+eq(books.txns[7].action, "withdrawForTab", "a purchase notice is stored as the withdrawal")
 eq(cache.repairs, 500, "repairs")
 eq(cache.net, 6000, "net gold")
 eq(cache.itemIn, 20, "items in")
@@ -391,9 +392,9 @@ added = Ledger.MergeStream(tabBuy, "money", {
 	line("Ada", "buyTab", day, { copper = 10000000 }),
 	line("Ada", "withdraw", day, { copper = 10000000 }),
 })
-eq(added, 2, "a tab purchase and a real withdrawal are both kept")
-eq(#tabBuy.txns, 2, "the paired tab withdrawal is not stored")
-eq(tabBuy.txns[1].action, "buyTab", "the purchase name is kept")
+eq(added, 2, "the withdrawal and a real withdrawal are both kept")
+eq(#tabBuy.txns, 2, "the purchase notice is not stored")
+eq(tabBuy.txns[1].action, "withdrawForTab", "the withdrawal for the tab is kept")
 local tabCache = Ledger.Rebuild(tabBuy)
 eq(tabCache.tabCost, 10000000, "the tab is counted once")
 eq(tabCache.goldOut, 20000000, "the real withdrawal is still out")
@@ -402,15 +403,17 @@ added = Ledger.MergeStream(tabBuy, "money", {
 	line("Ada", "withdrawForTab", day, { copper = 10000000 }),
 	line("Ada", "buyTab", day, { copper = 10000000 }),
 })
-eq(added, 0, "a later scan does not store the tab purchase again")
-eq(#tabBuy.txns, 2, "the tab purchase stays one line")
+eq(added, 0, "a later scan does not store the purchase notice")
+eq(#tabBuy.txns, 2, "the tab withdrawal stays one line")
 
 local secondTab = Ledger.NewGuild("OLYMPUS", "Realm")
 added = Ledger.MergeStream(secondTab, "money", {
 	line("Ada", "buyTab", day, { copper = 10000000 }),
 	line("Ada", "buyTab", day, { copper = 25000000 }),
 })
-eq(added, 2, "two tab prices are two purchases")
+eq(added, 2, "two tab prices are two withdrawals")
+eq(secondTab.txns[1].action, "withdrawForTab", "the first notice is kept as a withdrawal")
+eq(secondTab.txns[2].action, "withdrawForTab", "the next tab price is kept")
 eq(Ledger.Rebuild(secondTab).tabCost, 35000000, "both tab prices count")
 
 local savedPair = Ledger.NewGuild("OLYMPUS", "Realm")
@@ -420,10 +423,20 @@ savedPair.txns = {
 	{ id = 3, ord = 3, stream = "money", action = "withdraw", who = "Ada", day = day, precision = "day", copper = 500 },
 }
 local paired = Ledger.CollapseTabPairs(savedPair)
-eq(paired, 1, "a saved pair drops one line")
+eq(paired, 1, "a saved purchase notice is dropped")
 eq(#savedPair.txns, 2, "the withdrawal beside the tab stays")
-eq(savedPair.txns[1].action, "buyTab", "the saved line keeps the purchase name")
+eq(savedPair.txns[1].action, "withdrawForTab", "the saved withdrawal is kept")
 eq(Ledger.Rebuild(savedPair).tabCost, 10000000, "a repaired ledger counts the tab once")
+eq(Ledger.Rebuild(savedPair).goldOut, 10000500, "the notice is not a second 100 gold")
+
+local onlyNotice = Ledger.NewGuild("OLYMPUS", "Realm")
+onlyNotice.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "buyTab", who = "Ada", day = day, precision = "day", copper = 25000000 },
+}
+eq(Ledger.CollapseTabPairs(onlyNotice), 0, "a lone notice is not a second line")
+eq(#onlyNotice.txns, 1, "a lone notice stays one line")
+eq(onlyNotice.txns[1].action, "withdrawForTab", "a lone notice is kept as the withdrawal")
+eq(Ledger.Rebuild(onlyNotice).goldOut, 25000000, "a lone notice still counts once")
 
 if failed > 0 then
 	io.stderr:write(string.format("%d failed\n", failed))
