@@ -1,5 +1,22 @@
 Notes follow Cisco caveat style. A bug found in a shipped release is added to that release as an open caveat. When a later release fixes it, that earlier note stays and names the release that resolved it. The fixing release lists the same caveat under resolved caveats.
 
+## Release 0.2.1-beta
+
+A scan and a merge use the same deposit check. The same person, action, and amount on another day stay. A clock that crossed midnight stays one line. When one reading has a clock and the other has only a date, the clock is kept.
+
+Resolved caveats. This was present in 0.2.0-beta and is fixed in 0.2.1-beta.
+
+| Identifier | Affected release | Resolved in | Description |
+| --- | --- | --- | --- |
+| [#8](https://github.com/Enlinks/guild-bank-ledger-forever/issues/8) | 0.2.0-beta | 0.2.1-beta | A rescan dropped lines a merge kept, including an older deposit and a line that still had a clock. |
+
+**#8 A rescan drops lines the merge just kept**
+
+- **Symptom:** Merging the older ledger keeps lines that a later scan removes. One of them is a 25s deposit on Nov 15. The scan can also replace a line that has a clock with a later line that has only a date.
+- **Conditions:** Seen in 0.2.0-beta. The guild bank log no longer shows the older line. The scan treated the same person and amount as one deposit and ignored the day.
+- **Workaround:** None.
+- **Resolution:** Fixed in 0.2.1-beta. A scan and a merge use the same deposit check. The line with a clock is kept. A deposit on another day stays.
+
 ## Release 0.2.0-beta
 
 Backup this ledger saves a copy. The copy keeps the guild name, and its realm is `backup-` plus the date and time, down to the second. Merge into this one folds another saved ledger into the one on screen. Both ledgers stay unless Delete the other ledger is checked. Every line needs a character name.
@@ -10,14 +27,14 @@ Open caveats. This release did not close them.
 
 | Identifier | Found in | Resolved in | Description |
 | --- | --- | --- | --- |
-| [#8](https://github.com/Enlinks/guild-bank-ledger-forever/issues/8) | 0.2.0-beta | open | A rescan drops lines a merge kept, including an older deposit and a line that still has a clock. |
+| [#8](https://github.com/Enlinks/guild-bank-ledger-forever/issues/8) | 0.2.0-beta | 0.2.1-beta | A rescan drops lines a merge kept, including an older deposit and a line that still has a clock. |
 
 **#8 A rescan drops lines the merge just kept**
 
 - **Symptom:** Merging the older ledger keeps lines that a later scan removes. One of them is a 25s deposit on Nov 15. The scan can also replace a line that has a clock with a later line that has only a date.
 - **Conditions:** Seen in 0.2.0-beta. The guild bank log no longer shows the older line. The scan treated the same person and amount as one deposit and ignored the day.
 - **Workaround:** Keep the backup made before the scan. Merge it again after updating, and leave Delete the other ledger unchecked.
-- **Resolution:** Not in a release yet. A scan and a merge use the same deposit check. The line with a clock is kept. A deposit on another day stays.
+- **Resolution:** Fixed in 0.2.1-beta. A scan and a merge use the same deposit check. The line with a clock is kept. A deposit on another day stays.
 
 Resolved caveats. These were present in 0.1.3-beta and are fixed in 0.2.0-beta.
 

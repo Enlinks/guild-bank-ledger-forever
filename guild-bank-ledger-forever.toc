@@ -3,7 +3,7 @@
 ## Title: Guild Bank Ledger (Forever)
 ## Notes: Aggregated guild bank ledger. One running log per guild.
 ## Author: Enlinks
-## Version: 0.2.0-beta
+## Version: 0.2.1-beta
 ## SavedVariables: GuildBankLedgerForeverDB
 ## IconTexture: Interface\AddOns\guild-bank-ledger-forever\icon.png
 ## Category: Guild

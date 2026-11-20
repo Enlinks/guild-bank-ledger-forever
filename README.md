@@ -115,8 +115,8 @@ After the beta, use `YYYY.MINOR.PATCH`. `2026.1.0` is the first release. A featu
 Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ```sh
-git tag 0.2.0-beta
-git push origin main 0.2.0-beta
+git tag 0.2.1-beta
+git push origin main 0.2.1-beta
 ```
 
 A tag whose name contains `beta` is filed as a beta. A tag whose name contains `alpha` is an alpha. Any other tag is a release. A push to `main` without a tag does not publish a file.
