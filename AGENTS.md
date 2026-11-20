@@ -36,6 +36,7 @@ Do not claim an in-game check passed unless it was actually done. Say when a cha
 ## Boundaries
 
 - Import accepts a Transactions export, including a hand-written one. Guild and realm may be blank, and the guild open in the window receives the lines. Lines already saved stay as they are, and an export that names another guild is refused. Character and item totals are not imported.
+- Release notes in `CHANGELOG.md` follow Cisco caveat style. A bug found in a shipped release is added to that release as an open caveat. When a later release fixes it, the earlier note stays and names the release that resolved it.
 - A transaction export keeps the newest 5,000 lines.
 - There is no sync between accounts. Characters on the same WoW account share one save.
 - Prefer the `C_CurrencyInfo` and `C_Item` fallbacks already in `Core.lua` and `Scan.lua` when a removed global is missing.
