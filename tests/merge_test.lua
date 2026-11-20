@@ -256,6 +256,297 @@ added, gap = Ledger.MergeStream(agedLine, "money", {
 })
 eq(added, 0, "a day-old reread matches the pinned hour")
 eq(#agedLine.txns, 1, "aging a line does not duplicate it")
+eq(agedLine.txns[1].hour, 12, "the timed line keeps its hour")
+eq(agedLine.txns[1].precision, "hour", "a date-only reread does not wipe the hour")
+
+local d18 = Time.Pack(2026, 11, 18)
+local d19 = Time.Pack(2026, 11, 19)
+local d20 = Time.Pack(2026, 11, 20)
+local faded = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(faded, "money", {
+	line("Mira", "deposit", d19, { copper = 50000, precision = "hour", hour = 21 }),
+	line("Mira", "withdrawForTab", d19, { copper = 10000000, precision = "hour", hour = 21 }),
+})
+added, gap = Ledger.MergeStream(faded, "money", {
+	line("Mira", "deposit", d19, { copper = 50000, precision = "day" }),
+	line("Mira", "withdrawForTab", d19, { copper = 10000000, precision = "day" }),
+})
+eq(added, 0, "a same-day date-only reread is ignored")
+eq(gap, false, "a date-only reread of timed lines is not a gap")
+eq(#faded.txns, 2, "the timed deposit and tab buy stay")
+eq(faded.txns[1].hour, 21, "the deposit keeps its clock time")
+eq(faded.txns[2].hour, 21, "the tab buy keeps its clock time")
+
+added, gap = Ledger.MergeStream(faded, "money", {
+	line("Mira", "deposit", d20, { copper = 50000, precision = "day" }),
+	line("Mira", "deposit", d19, { copper = 50000, precision = "day" }),
+})
+eq(added, 0, "a cut-off re-read of the same deposit is not stored again")
+eq(gap, false, "the same-day reread still overlaps")
+eq(#faded.txns, 2, "the timed deposit stays the only copy")
+eq(faded.txns[1].hour, 21, "the first clock time stays")
+
+local datedFirst = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(datedFirst, "money", {
+	line("Mira", "deposit", d19, { copper = 50000, precision = "day" }),
+})
+added, gap = Ledger.MergeStream(datedFirst, "money", {
+	line("Mira", "deposit", d19, { copper = 50000, precision = "hour", hour = 21 }),
+})
+eq(added, 0, "a later clock time replaces the date-only line")
+eq(#datedFirst.txns, 1, "the upgrade does not store a second deposit")
+eq(datedFirst.txns[1].hour, 21, "the saved line takes the clock time")
+eq(datedFirst.txns[1].precision, "hour", "the saved line becomes timed")
+eq(datedFirst.txns[1].day, d19, "the saved day stays on that day")
+
+local onlyDated = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.MergeStream(onlyDated, "money", {
+	line("Mira", "deposit", d19, { copper = 50000, precision = "day" }),
+	line("Mira", "deposit", d19, { copper = 50000, precision = "day" }),
+})
+eq(added, 2, "two date-only deposits are both kept")
+eq(#onlyDated.txns, 2, "no timed line means nothing is dropped")
+
+local oneScan = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.MergeStream(oneScan, "money", {
+	line("Mira", "deposit", d19, { copper = 50000, precision = "hour", hour = 21 }),
+	line("Mira", "deposit", d19, { copper = 50000, precision = "day" }),
+	line("Mira", "deposit", d19, { copper = 10000, precision = "day" }),
+})
+eq(added, 2, "the same scan keeps the timed line and a different amount")
+eq(oneScan.txns[1].hour, 21, "the timed deposit is the one stored")
+eq(oneScan.txns[2].copper, 10000, "the other date-only deposit stays")
+
+local beside = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.MergeStream(beside, "money", {
+	line("Mira", "deposit", d18, { copper = 50000, precision = "day" }),
+	line("Mira", "deposit", d19, { copper = 50000, precision = "hour", hour = 21 }),
+})
+eq(added, 2, "the previous day's deposit is not the timed line")
+eq(beside.txns[1].precision, "day", "the previous day stays date-only")
+eq(beside.txns[2].hour, 21, "the timed deposit stays timed")
+
+local midnight = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(midnight, "money", {
+	line("Mira", "deposit", d19, { copper = 100, precision = "hour", hour = 0 }),
+})
+added = Ledger.MergeStream(midnight, "money", {
+	line("Mira", "deposit", d19, { copper = 100, precision = "hour", hour = 15 }),
+})
+eq(added, 1, "midnight and an afternoon deposit both stay")
+eq(#midnight.txns, 2, "hour 0 is a real clock time")
+added = Ledger.MergeStream(midnight, "money", {
+	line("Mira", "deposit", d19, { copper = 100, precision = "day" }),
+})
+eq(added, 0, "a date-only reread matches the midnight line")
+eq(#midnight.txns, 2, "the afternoon deposit stays beside midnight")
+
+local savedEcho = Ledger.NewGuild("OLYMPUS", "Realm")
+savedEcho.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "deposit", who = "Mira", day = d19, precision = "day", copper = 50000 },
+	{ id = 2, ord = 2, stream = "money", action = "withdrawForTab", who = "Mira", day = d19, precision = "day", copper = 10000000 },
+	{ id = 3, ord = 3, stream = "money", action = "deposit", who = "Mira", day = d19, precision = "hour", hour = 21, copper = 50000 },
+	{ id = 4, ord = 4, stream = "money", action = "withdrawForTab", who = "Mira", day = d19, precision = "hour", hour = 21, copper = 10000000 },
+	{ id = 5, ord = 5, stream = "tab:1", action = "deposit", who = "Mira", day = d19, precision = "hour", hour = 6, itemID = 4306, count = 1, tab = 1 },
+	{ id = 6, ord = 6, stream = "money", action = "withdraw", who = "Mira", day = d18, precision = "day", copper = 2500 },
+}
+local echoRemoved = Ledger.PreferTimestamps(savedEcho)
+eq(echoRemoved, 2, "saved date-only copies of timed lines are dropped")
+eq(#savedEcho.txns, 4, "the timed lines and the unmatched withdrawal stay")
+eq(savedEcho.txns[1].hour, 21, "the timed deposit is kept")
+eq(savedEcho.txns[2].hour, 21, "the timed tab buy is kept")
+eq(savedEcho.txns[3].hour, 6, "a timed item line with no date-only copy stays")
+eq(savedEcho.txns[4].copper, 2500, "a date-only line with no timed match stays")
+eq(Ledger.Rebuild(savedEcho).goldIn, 50000, "the deposit is counted once")
+eq(Ledger.Rebuild(savedEcho).tabCost, 10000000, "the tab buy is counted once")
+eq(Ledger.PreferTimestamps(savedEcho), 0, "a second pass finds nothing new")
+
+local slipped = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(slipped, "money", {
+	line("Theo", "deposit", d18, { copper = 5000, precision = "hour", hour = 10 }),
+	line("Omar", "deposit", d18, { copper = 4000, precision = "hour", hour = 20 }),
+	line("Mira", "deposit", d18, { copper = 50000, precision = "hour", hour = 21 }),
+	line("Sol", "deposit", d18, { copper = 350000, precision = "hour", hour = 21 }),
+	line("Mira", "buyTab", d18, { copper = 1000000, precision = "hour", hour = 21 }),
+	line("Quin", "deposit", d18, { copper = 50000, precision = "hour", hour = 23 }),
+	line("Vale", "deposit", d19, { copper = 2000, precision = "hour", hour = 6 }),
+})
+added, gap = Ledger.MergeStream(slipped, "money", {
+	line("Theo", "deposit", d19, { copper = 5000, precision = "day" }),
+	line("Omar", "deposit", d19, { copper = 4000, precision = "day" }),
+	line("Mira", "deposit", d19, { copper = 50000, precision = "day" }),
+	line("Sol", "deposit", d19, { copper = 350000, precision = "day" }),
+	line("Mira", "buyTab", d19, { copper = 1000000, precision = "day" }),
+	line("Quin", "deposit", d19, { copper = 50000, precision = "day" }),
+	line("Tess", "deposit", d19, { copper = 50000, precision = "hour", hour = 17 }),
+})
+eq(added, 1, "a repeated stretch one day later adds nothing but the new deposit")
+eq(gap, false, "a repeated stretch still overlaps the saved log")
+eq(#slipped.txns, 8, "the timed stretch stays and the new deposit is kept")
+eq(slipped.txns[4].who, "Sol", "Sol stays on the timed line")
+eq(slipped.txns[4].hour, 21, "Sol keeps the clock time")
+eq(slipped.txns[8].who, "Tess", "the deposit after the stretch is new")
+eq(Ledger.Rebuild(slipped).goldIn, 5000 + 4000 + 50000 + 350000 + 50000 + 2000 + 50000, "the slipped deposits are not counted twice")
+
+local alreadySlipped = Ledger.NewGuild("OLYMPUS", "Realm")
+alreadySlipped.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "deposit", who = "Theo", day = d18, precision = "hour", hour = 10, copper = 5000 },
+	{ id = 2, ord = 2, stream = "money", action = "deposit", who = "Omar", day = d18, precision = "hour", hour = 20, copper = 4000 },
+	{ id = 3, ord = 3, stream = "money", action = "deposit", who = "Mira", day = d18, precision = "hour", hour = 21, copper = 50000 },
+	{ id = 4, ord = 4, stream = "money", action = "deposit", who = "Sol", day = d18, precision = "hour", hour = 21, copper = 350000 },
+	{ id = 5, ord = 5, stream = "money", action = "buyTab", who = "Mira", day = d18, precision = "hour", hour = 21, copper = 1000000 },
+	{ id = 6, ord = 6, stream = "money", action = "deposit", who = "Quin", day = d18, precision = "hour", hour = 23, copper = 50000 },
+	{ id = 7, ord = 7, stream = "money", action = "deposit", who = "Vale", day = d19, precision = "hour", hour = 6, copper = 2000 },
+	{ id = 8, ord = 8, stream = "money", action = "deposit", who = "Theo", day = d19, precision = "day", copper = 5000 },
+	{ id = 9, ord = 9, stream = "money", action = "deposit", who = "Omar", day = d19, precision = "day", copper = 4000 },
+	{ id = 10, ord = 10, stream = "money", action = "deposit", who = "Mira", day = d19, precision = "day", copper = 50000 },
+	{ id = 11, ord = 11, stream = "money", action = "deposit", who = "Sol", day = d19, precision = "day", copper = 350000 },
+	{ id = 12, ord = 12, stream = "money", action = "buyTab", who = "Mira", day = d19, precision = "day", copper = 1000000 },
+	{ id = 13, ord = 13, stream = "money", action = "deposit", who = "Quin", day = d19, precision = "day", copper = 50000 },
+	{ id = 14, ord = 14, stream = "money", action = "deposit", who = "Tess", day = d19, precision = "hour", hour = 17, copper = 50000 },
+}
+eq(Ledger.PreferTimestamps(alreadySlipped), 6, "a saved repeated stretch is removed on load")
+eq(#alreadySlipped.txns, 8, "the timed stretch and the unrelated deposits stay")
+eq(alreadySlipped.txns[4].who, "Sol", "the timed Sol line is the one kept")
+eq(alreadySlipped.txns[4].day, d18, "Sol stays on the day the clock time gave")
+local slippedGold = Ledger.Rebuild(alreadySlipped)
+eq(slippedGold.goldIn, 5000 + 4000 + 50000 + 350000 + 50000 + 2000 + 50000, "Sol is counted once")
+eq(slippedGold.tabCost, 1000000, "the tab buy is counted once")
+
+local loneNext = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(loneNext, "money", {
+	line("Ada", "deposit", d18, { copper = 100, precision = "hour", hour = 9 }),
+	line("Sol", "deposit", d18, { copper = 350000, precision = "hour", hour = 21 }),
+	line("Bob", "withdraw", d18, { copper = 50, precision = "hour", hour = 22 }),
+})
+added, gap = Ledger.MergeStream(loneNext, "money", {
+	line("Cara", "deposit", d19, { copper = 350000, precision = "day" }),
+	line("Sol", "deposit", d20, { copper = 350000, precision = "day" }),
+})
+eq(added, 2, "a deposit with different neighbors is kept")
+eq(#loneNext.txns, 5, "the timed Sol line is not a match for a different stretch")
+
+-- Pia deposited 25s once. A later scan crossed midnight and stored 00:00 as well.
+local pia = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(pia, "money", {
+	line("Tess", "deposit", d19, { copper = 50000, precision = "hour", hour = 17 }),
+	line("Pia", "deposit", d19, { copper = 2500, precision = "hour", hour = 23 }),
+	line("Uma", "deposit", d20, { copper = 200, precision = "hour", hour = 0 }),
+	line("Nia", "deposit", d20, { copper = 10000, precision = "hour", hour = 3 }),
+	line("Pia", "deposit", d20, { copper = 2500, precision = "hour", hour = 0 }),
+})
+eq(#pia.txns, 5, "a first read keeps the extra tail it was given")
+added, gap = Ledger.MergeStream(pia, "money", {
+	line("Tess", "deposit", d19, { copper = 50000, precision = "hour", hour = 17 }),
+	line("Pia", "deposit", d20, { copper = 2500, precision = "hour", hour = 0 }),
+	line("Uma", "deposit", d20, { copper = 200, precision = "hour", hour = 0 }),
+	line("Nia", "deposit", d20, { copper = 10000, precision = "hour", hour = 3 }),
+	line("Vesper", "deposit", d20, { copper = 2500, precision = "hour", hour = 1 }),
+})
+eq(added, 1, "the new deposit after Pia is kept")
+eq(gap, false, "Pia's stretch still overlaps")
+local piaCount = 0
+for i = 1, #pia.txns do
+	if pia.txns[i].who == "Pia" then
+		piaCount = piaCount + 1
+		eq(pia.txns[i].hour, 23, "Pia keeps the first clock time")
+		eq(pia.txns[i].day, d19, "Pia stays on the first day")
+	end
+end
+eq(piaCount, 1, "Pia's midnight copy is one deposit")
+eq(pia.txns[#pia.txns].who, "Vesper", "the newest deposit is appended")
+
+-- The extra copy was saved, then a later scan stored the deposit after it.
+-- The next read of the live log has to drop the copy that sits in between.
+local piaBetween = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(piaBetween, "money", {
+	line("Tess", "deposit", d19, { copper = 50000, precision = "hour", hour = 17 }),
+	line("Pia", "deposit", d19, { copper = 2500, precision = "hour", hour = 23 }),
+	line("Uma", "deposit", d20, { copper = 200, precision = "hour", hour = 0 }),
+	line("Nia", "deposit", d20, { copper = 10000, precision = "hour", hour = 3 }),
+	line("Pia", "deposit", d20, { copper = 2500, precision = "hour", hour = 0 }),
+	line("Vesper", "deposit", d20, { copper = 2500, precision = "hour", hour = 9 }),
+})
+eq(#piaBetween.txns, 6, "the extra copy is already between two saved lines")
+added, gap = Ledger.MergeStream(piaBetween, "money", {
+	line("Tess", "deposit", d19, { copper = 50000, precision = "hour", hour = 17 }),
+	line("Pia", "deposit", d20, { copper = 2500, precision = "hour", hour = 0 }),
+	line("Uma", "deposit", d20, { copper = 200, precision = "hour", hour = 0 }),
+	line("Nia", "deposit", d20, { copper = 10000, precision = "hour", hour = 3 }),
+	line("Vesper", "deposit", d20, { copper = 2500, precision = "hour", hour = 9 }),
+})
+eq(added, 0, "the live log adds nothing once the copy is dropped")
+eq(gap, false, "the live log still overlaps")
+local betweenCount = 0
+for i = 1, #piaBetween.txns do
+	if piaBetween.txns[i].who == "Pia" then
+		betweenCount = betweenCount + 1
+		eq(piaBetween.txns[i].hour, 23, "the first Pia clock stays")
+		eq(piaBetween.txns[i].day, d19, "the first Pia day stays")
+	end
+end
+eq(betweenCount, 1, "the copy between Nia and Vesper is removed")
+eq(piaBetween.txns[#piaBetween.txns].who, "Vesper", "Vesper stays the newest line")
+
+local twoPias = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(twoPias, "money", {
+	line("Ada", "deposit", d19, { copper = 100, precision = "hour", hour = 10 }),
+	line("Pia", "deposit", d19, { copper = 2500, precision = "hour", hour = 23 }),
+	line("Bob", "withdraw", d19, { copper = 50, precision = "hour", hour = 22 }),
+	line("Pia", "deposit", d20, { copper = 2500, precision = "hour", hour = 0 }),
+	line("Cara", "deposit", d20, { copper = 80, precision = "hour", hour = 2 }),
+})
+added = Ledger.MergeStream(twoPias, "money", {
+	line("Ada", "deposit", d19, { copper = 100, precision = "hour", hour = 10 }),
+	line("Pia", "deposit", d19, { copper = 2500, precision = "hour", hour = 23 }),
+	line("Bob", "withdraw", d19, { copper = 50, precision = "hour", hour = 22 }),
+	line("Pia", "deposit", d20, { copper = 2500, precision = "hour", hour = 0 }),
+	line("Cara", "deposit", d20, { copper = 80, precision = "hour", hour = 2 }),
+})
+eq(added, 0, "two real Pia deposits are not a time window")
+eq(#twoPias.txns, 5, "different neighbors keep both clock times")
+
+local history = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(history, "money", {
+	line("Old", "deposit", d18, { copper = 900, precision = "hour", hour = 8 }),
+	line("Tess", "deposit", d19, { copper = 50000, precision = "hour", hour = 17 }),
+	line("Pia", "deposit", d19, { copper = 2500, precision = "hour", hour = 23 }),
+	line("Uma", "deposit", d20, { copper = 200, precision = "hour", hour = 0 }),
+})
+added = Ledger.MergeStream(history, "money", {
+	line("Old", "deposit", d19, { copper = 900, precision = "day" }),
+	line("Tess", "deposit", d19, { copper = 50000, precision = "hour", hour = 17 }),
+	line("Pia", "deposit", d20, { copper = 2500, precision = "hour", hour = 0 }),
+	line("Uma", "deposit", d20, { copper = 200, precision = "hour", hour = 0 }),
+	line("Vesper", "deposit", d20, { copper = 2500, precision = "hour", hour = 1 }),
+})
+eq(added, 1, "the cut-off re-read is not a new line")
+eq(history.txns[1].who, "Old", "scrolled-off history stays")
+eq(history.txns[1].hour, 8, "the old line keeps its clock")
+local oldCount = 0
+for i = 1, #history.txns do
+	if history.txns[i].who == "Old" then
+		oldCount = oldCount + 1
+	end
+end
+eq(oldCount, 1, "the cut-off line is not stored twice")
+
+local items = Ledger.NewGuild("OLYMPUS", "Realm")
+Ledger.MergeStream(items, "tab:1", {
+	line("Ada", "deposit", d19, { itemID = 4306, count = 5, tab = 1, precision = "hour", hour = 6 }),
+	line("Pia", "deposit", d19, { itemID = 4633, count = 1, tab = 1, precision = "hour", hour = 0 }),
+	line("Bob", "withdraw", d19, { itemID = 4306, count = 1, tab = 1, precision = "hour", hour = 8 }),
+})
+added = Ledger.MergeStream(items, "tab:1", {
+	line("Ada", "deposit", d19, { itemID = 4306, count = 5, tab = 1, precision = "hour", hour = 6 }),
+	line("Pia", "deposit", d20, { itemID = 4633, count = 1, tab = 1, precision = "hour", hour = 1 }),
+	line("Bob", "withdraw", d19, { itemID = 4306, count = 1, tab = 1, precision = "hour", hour = 8 }),
+	line("Cara", "deposit", d20, { itemID = 2589, count = 1, tab = 1, precision = "hour", hour = 4 }),
+})
+eq(added, 1, "an item line uses the neighbors in its own tab")
+eq(#items.txns, 4, "the shifted item line is not a second deposit")
+eq(items.txns[2].hour, 0, "the item line keeps the first hour")
+eq(items.txns[2].itemID, 4633, "the item stays the lockbox")
 
 local doubled = Ledger.NewGuild("OLYMPUS", "Realm")
 Ledger.MergeStream(doubled, "money", {
@@ -268,6 +559,17 @@ local removed = Ledger.CollapseDuplicates(doubled)
 eq(removed, 1, "collapse drops the copied withdrawal")
 eq(#doubled.txns, 2, "the deposit stays beside one withdrawal")
 eq(doubled.txns[2].copper, 10000, "collapse keeps the other amount")
+
+local clockCopy = Ledger.NewGuild("OLYMPUS", "Realm")
+clockCopy.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "deposit", who = "Mira", day = d7, precision = "day", copper = 50000 },
+	{ id = 2, ord = 2, stream = "money", action = "deposit", who = "Mira", day = d7, precision = "hour", hour = 21, copper = 50000 },
+	{ id = 3, ord = 3, stream = "money", action = "withdraw", who = "Mira", day = d7, precision = "day", copper = 2500 },
+}
+removed = Ledger.CollapseDuplicates(clockCopy)
+eq(removed, 1, "collapse drops the date-only copy")
+eq(#clockCopy.txns, 2, "the timed deposit and the withdrawal stay")
+eq(clockCopy.txns[1].hour, 21, "collapse keeps the clock time")
 
 local function countAction(guild, action)
 	local count = 0
@@ -437,6 +739,26 @@ eq(Ledger.CollapseTabPairs(onlyNotice), 0, "a lone notice is not a second line")
 eq(#onlyNotice.txns, 1, "a lone notice stays one line")
 eq(onlyNotice.txns[1].action, "withdrawForTab", "a lone notice is kept as the withdrawal")
 eq(Ledger.Rebuild(onlyNotice).goldOut, 25000000, "a lone notice still counts once")
+
+local timedNotices = Ledger.NewGuild("OLYMPUS", "Realm")
+timedNotices.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "buyTab", who = "Ada", day = d19, precision = "day", copper = 10000000 },
+	{ id = 2, ord = 2, stream = "money", action = "buyTab", who = "Ada", day = d19, precision = "hour", hour = 21, copper = 10000000 },
+}
+eq(Ledger.CollapseTabPairs(timedNotices), 1, "the date-only tab notice is the extra line")
+eq(#timedNotices.txns, 1, "one tab purchase remains")
+eq(timedNotices.txns[1].action, "withdrawForTab", "the kept tab line is the withdrawal")
+eq(timedNotices.txns[1].hour, 21, "the clock time is kept when the notice came first")
+
+local timedFirst = Ledger.NewGuild("OLYMPUS", "Realm")
+timedFirst.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "withdrawForTab", who = "Ada", day = d19, precision = "day", copper = 10000000 },
+	{ id = 2, ord = 2, stream = "money", action = "buyTab", who = "Ada", day = d19, precision = "hour", hour = 21, copper = 10000000 },
+}
+eq(Ledger.CollapseTabPairs(timedFirst), 1, "a timed notice upgrades the saved withdrawal")
+eq(#timedFirst.txns, 1, "the upgraded withdrawal is the only tab line")
+eq(timedFirst.txns[1].hour, 21, "the withdrawal takes the clock time")
+eq(timedFirst.txns[1].precision, "hour", "the withdrawal is timed after the upgrade")
 
 if failed > 0 then
 	io.stderr:write(string.format("%d failed\n", failed))

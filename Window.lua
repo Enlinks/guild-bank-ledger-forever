@@ -27,7 +27,7 @@ local KIND_LABEL = {
 }
 
 local NOTES = {
-	ledger = "The day is fixed the first time a line is seen. An hour is shown only when the log sent one. Out includes tab purchases. Summary lines are not added into the totals.",
+	ledger = "A line is the same one when the lines above and below it match, even if the time moved. Out includes tab purchases. Summary lines are not added into the totals.",
 	dates = "Pick a day to see the lines pinned to it. A mark in front of a day means the log only gave a month or a year.",
 	export = "Click the box and press Ctrl+C. Import pastes a transaction export into the guild you are viewing. Lines already saved stay as they are.",
 	settings = "Each guild keeps its own ledger on this account. Other accounts do not see it.",

@@ -67,6 +67,11 @@ function GBLF.InitDB()
 				local noun = paired == 1 and "tab purchase" or "tab purchases"
 				GBLF.Print("Removed " .. paired .. " duplicated " .. noun .. " from " .. (guild.name or key) .. ".")
 			end
+			local faded = GBLF.Ledger.PreferTimestamps(guild)
+			if faded > 0 then
+				local noun = faded == 1 and "date-only copy of a timed line" or "date-only copies of timed lines"
+				GBLF.Print("Removed " .. faded .. " " .. noun .. " from " .. (guild.name or key) .. ".")
+			end
 		end
 	end
 	GBLF.caches = {}

@@ -34,9 +34,9 @@ Open the guild bank and press Scan, or type `/scan`. With the default settings t
 
 ## How the log is kept
 
-Each item tab, and the money log, is its own list. A scan is the slice the game still has, usually a few dozen lines. Lines that match the end of what is already saved are skipped. Lines after that match are added. The first scan of a tab is not treated as a hole.
+Each item tab, and the money log, is its own list. A scan is the slice the game still has, usually a few dozen lines. A line already saved stays when the line above it and the line below it are the same. Lines after that overlap are added. The first scan of a tab is not treated as a hole.
 
-The game usually says "3 days ago", not the hour. The day is stored the first time a line is seen and is not moved later. An hour is stored only when the log's age was in hours. A `≈` in front of a date means the log only gave a month or a year.
+The game usually says "3 days ago", not the hour. A clock time is kept when the log's age was in hours. A later scan is the same line when the line above it and the line below it are the same people, actions, and amounts, even if the clock time moved. Money and each item tab are matched as their own log. The lines at the two ends of a scan have only one neighbor, so a re-read there stays on the time already saved. History that has scrolled off the log is left as it was captured. A `≈` in front of a date means the log only gave a month or a year.
 
 If a later scan does not overlap the previous tail, the log rolled past between visits. Those missing lines cannot be recovered. The ledger records a gap and keeps going. Leaving the bank open, with the rescan timer on, is what keeps a busy tab complete.
 
@@ -65,8 +65,8 @@ After the beta, use `YYYY.MINOR.PATCH`. `2026.1.0` is the first release. A featu
 Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ```sh
-git tag 0.1.2-beta
-git push origin main 0.1.2-beta
+git tag 0.1.3-beta
+git push origin main 0.1.3-beta
 ```
 
 A tag whose name contains `beta` is filed as a beta. A tag whose name contains `alpha` is an alpha. Any other tag is a release. A push to `main` without a tag does not publish a file.

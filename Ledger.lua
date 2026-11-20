@@ -2,7 +2,11 @@
 -- Each guild bank tab, and the money log, is its own ordered stream.
 -- A new read is matched against lines already saved, in any order. A line
 -- already stored is not added again. Lines the log no longer shows stay put.
--- The day is pinned the first time a line is seen and is not moved later.
+-- A line that still has a clock time wins. The lines directly above and below
+-- it, in that log, identify it. Money and item tabs are separate logs. A
+-- later read with the same neighbors is the same transaction even when the
+-- clock time moved. The day moves only when a clock time arrives for a line
+-- that did not have one. Lines that have scrolled off the log stay put.
 
 GBLF = GBLF or {}
 GBLF.Ledger = {}
@@ -59,6 +63,25 @@ local function canonicalAction(action)
 	return action
 end
 
+-- A clock time is kept only while the log's age was still in hours.
+-- Hour 0 is midnight, so a missing hour is nil rather than a false hour.
+local function hasClock(row)
+	if row.precision == "hour" then
+		return row.hour ~= nil
+	end
+	if not row.precision and row.hour ~= nil then
+		return true
+	end
+	return false
+end
+
+local function isDateOnly(row)
+	if row.precision == "month" or row.precision == "year" then
+		return false
+	end
+	return not hasClock(row)
+end
+
 local function sameLine(a, b)
 	local actionA = canonicalAction(a.action)
 	local actionB = canonicalAction(b.action)
@@ -82,8 +105,11 @@ local function sameLine(a, b)
 	return identity(a) == identity(b)
 end
 
--- Same calendar day for hour and day lines. A month or year age is coarse,
--- so those lines may land a few days apart and still be the same event.
+-- Same calendar day for a timed line and a date-only line. Two timed lines
+-- also have to agree within two hours. A month or year age is coarse, so
+-- those lines may land further apart and still be the same event. A date
+-- that landed on a different day is kept: after the hour is gone the log
+-- cannot be matched with certainty.
 local function sameEvent(a, b)
 	if not sameLine(a, b) then
 		return false
@@ -96,19 +122,178 @@ local function sameEvent(a, b)
 	if GBLF.Time.DayDistance(a.day, b.day) ~= 0 then
 		return false
 	end
-	if a.hour and b.hour then
+	if hasClock(a) and hasClock(b) then
 		return math.abs(a.hour - b.hour) <= 2
 	end
 	return true
 end
 
+-- A timed line is preferred over a date-only line of the same event.
+-- Upgrading a date-only row is allowed only when no timed row already covers
+-- it, so a second timed withdrawal is not written onto the first one's copy.
 local function findUnused(stored, used, row)
+	local datedIndex = nil
 	for i = 1, #stored do
 		if not used[i] and sameEvent(stored[i], row) then
-			return i
+			if hasClock(stored[i]) or not hasClock(row) then
+				return i
+			end
+			if not datedIndex then
+				datedIndex = i
+			end
 		end
 	end
-	return nil
+	if datedIndex then
+		local dated = stored[datedIndex]
+		for i = 1, #stored do
+			if hasClock(stored[i]) and sameEvent(stored[i], dated) then
+				return nil
+			end
+		end
+	end
+	return datedIndex
+end
+
+local function takeClock(stored, incoming)
+	if hasClock(incoming) and not hasClock(stored) then
+		stored.hour = incoming.hour
+		stored.precision = incoming.precision or "hour"
+		if incoming.day then
+			stored.day = incoming.day
+		end
+	end
+end
+
+-- The log can move a line onto the next calendar day once the hour is gone.
+-- One day is the slip seen in practice. A wider gap is a different visit.
+local function daySlip(a, b)
+	return GBLF.Time.DayDistance(a.day, b.day) <= 1
+end
+
+-- How many date-only lines at `dates`, starting at i, repeat the timed lines
+-- at `times`, starting at j. The lines have to stay in log order. Comparing
+-- who, action, and amount is enough; the day does not have to agree.
+local function echoRunLength(dates, i, times, j, used)
+	local len = 0
+	while dates[i + len] and times[j + len] do
+		if i + len == j and dates == times then
+			break
+		end
+		if used and used[j + len] then
+			break
+		end
+		local dated = dates[i + len]
+		local timed = times[j + len]
+		if not (isDateOnly(dated) and hasClock(timed) and sameLine(dated, timed) and daySlip(dated, timed)) then
+			break
+		end
+		len = len + 1
+	end
+	return len
+end
+
+-- A date-only stretch of two or more lines that repeats a timed stretch.
+-- One repeated line is not enough unless the lines on either side agree too.
+local function echoMap(dates, times)
+	local echo = {}
+	local used = {}
+	local i = 1
+	while i <= #dates do
+		local bestLen = 0
+		local bestJ = nil
+		if isDateOnly(dates[i]) then
+			for j = 1, #times do
+				if hasClock(times[j]) and not used[j] then
+					local len = echoRunLength(dates, i, times, j, used)
+					if len > bestLen then
+						bestLen = len
+						bestJ = j
+					end
+				end
+			end
+		end
+		if bestLen >= 2 and bestJ then
+			for k = 0, bestLen - 1 do
+				echo[i + k] = bestJ + k
+				used[bestJ + k] = true
+			end
+			i = i + bestLen
+		else
+			i = i + 1
+		end
+	end
+	for i = 1, #dates do
+		if not echo[i] and isDateOnly(dates[i]) then
+			for j = 1, #times do
+				if not used[j] and hasClock(times[j]) and sameLine(dates[i], times[j]) and daySlip(dates[i], times[j]) then
+					local confirmed = false
+					local ok = true
+					if dates[i - 1] and times[j - 1] then
+						if sameLine(dates[i - 1], times[j - 1]) then
+							confirmed = true
+						else
+							ok = false
+						end
+					end
+					if ok and dates[i + 1] and times[j + 1] then
+						if sameLine(dates[i + 1], times[j + 1]) then
+							confirmed = true
+						else
+							ok = false
+						end
+					end
+					if ok and confirmed then
+						echo[i] = j
+						used[j] = true
+						break
+					end
+				end
+			end
+		end
+	end
+	return echo
+end
+
+local function dropRepeatedRuns(rows)
+	local echo = echoMap(rows, rows)
+	local kept = {}
+	for i = 1, #rows do
+		if not echo[i] then
+			kept[#kept + 1] = rows[i]
+		end
+	end
+	return kept
+end
+
+-- One scan can hold a line twice while its age changes from hours to a date.
+-- Keep the timed copy. A date-only line with no timed match in this scan stays.
+local function dropDatedShadows(rows)
+	local clocks = {}
+	for i = 1, #rows do
+		if hasClock(rows[i]) then
+			clocks[#clocks + 1] = rows[i]
+		end
+	end
+	if #clocks == 0 then
+		return rows
+	end
+	local kept = {}
+	for i = 1, #rows do
+		local row = rows[i]
+		local shadow = false
+		if isDateOnly(row) then
+			for j = 1, #clocks do
+				if sameEvent(clocks[j], row) then
+					shadow = true
+					break
+				end
+			end
+		end
+		if not shadow then
+			kept[#kept + 1] = row
+		end
+	end
+	return kept
 end
 
 -- Oldest first. Larger ageRank is older. Equal ages keep the log's own order:
@@ -232,6 +417,14 @@ local function dropBuyTabNotices(rows)
 				end
 			end
 			if covered then
+				if hasClock(row) then
+					for j = 1, #withdrawals do
+						if samePurse(row, withdrawals[j]) and not hasClock(withdrawals[j]) then
+							takeClock(withdrawals[j], row)
+							break
+						end
+					end
+				end
 				removed = removed + 1
 			else
 				row.action = "withdrawForTab"
@@ -249,6 +442,86 @@ function Ledger.CollapseTabPairs(guild)
 	return removed
 end
 
+-- Drop a saved date-only line when a timed line already records it.
+-- Same day is enough. A different day still counts when the lines beside it,
+-- in log order, are the same people, actions, and amounts. Two date-only
+-- lines are left alone. This runs on every load. CollapseDuplicates runs
+-- once, so it cannot see a copy stored after that pass.
+function Ledger.PreferTimestamps(guild)
+	local streams = {}
+	local order = {}
+	for i = 1, #guild.txns do
+		local txn = guild.txns[i]
+		local stream = txn.stream or ""
+		local list = streams[stream]
+		if not list then
+			list = {}
+			streams[stream] = list
+			order[#order + 1] = stream
+		end
+		list[#list + 1] = txn
+	end
+	local drop = {}
+	for s = 1, #order do
+		local rows = streams[order[s]]
+		local echo = echoMap(rows, rows)
+		for i = 1, #rows do
+			if echo[i] then
+				drop[rows[i]] = true
+			end
+		end
+		for a = 1, #rows do
+			if isDateOnly(rows[a]) and not drop[rows[a]] then
+				for b = 1, #rows do
+					if hasClock(rows[b]) and sameEvent(rows[b], rows[a]) then
+						drop[rows[a]] = true
+						break
+					end
+				end
+			end
+		end
+	end
+	local kept = {}
+	local removed = 0
+	for i = 1, #guild.txns do
+		if drop[guild.txns[i]] then
+			removed = removed + 1
+		else
+			kept[#kept + 1] = guild.txns[i]
+		end
+	end
+	guild.txns = kept
+	return removed
+end
+
+-- An interior line is the same transaction when the line above it and the
+-- line below it are the same people, actions, and amounts. The clock does
+-- not have to agree. The line at each end of a scan has only one neighbor,
+-- so it is not identified this way.
+local function findByNeighbors(stored, used, incoming, i)
+	if i <= 1 or i >= #incoming then
+		return nil
+	end
+	for j = 2, #stored - 1 do
+		if not used[j]
+			and sameLine(stored[j], incoming[i])
+			and sameLine(stored[j - 1], incoming[i - 1])
+			and sameLine(stored[j + 1], incoming[i + 1]) then
+			return j
+		end
+	end
+	return nil
+end
+
+local function sameLineAny(stored, row)
+	for i = 1, #stored do
+		if sameLine(stored[i], row) then
+			return true
+		end
+	end
+	return false
+end
+
 -- incoming is oldest-first. Returns how many lines were added, and whether
 -- this read missed the previous tail (the log rolled past between scans).
 function Ledger.MergeStream(guild, stream, incoming)
@@ -256,7 +529,10 @@ function Ledger.MergeStream(guild, stream, incoming)
 		return 0, false
 	end
 	incoming = dropBuyTabNotices(incoming)
+	incoming = dropDatedShadows(incoming)
+	incoming = dropRepeatedRuns(incoming)
 	if #incoming == 0 then
+		Ledger.PreferTimestamps(guild)
 		return 0, false
 	end
 
@@ -265,22 +541,44 @@ function Ledger.MergeStream(guild, stream, incoming)
 		for i = 1, #incoming do
 			appendRow(guild, stream, incoming[i])
 		end
+		Ledger.PreferTimestamps(guild)
 		return #incoming, false
 	end
 
+	local echo = echoMap(incoming, stored)
 	local used = {}
-	local older = {}
-	local newer = {}
-	local matched = false
+	local partner = {}
 	for i = 1, #incoming do
-		local index = findUnused(stored, used, incoming[i])
+		local index = findByNeighbors(stored, used, incoming, i)
+		if not index then
+			index = findUnused(stored, used, incoming[i])
+		end
+		if not index and echo[i] and not used[echo[i]] then
+			index = echo[i]
+		end
 		if index then
+			takeClock(stored[index], incoming[i])
 			used[index] = true
+			partner[i] = index
+		end
+	end
+	local matched = false
+	local firstJ = nil
+	local lastJ = nil
+	local continues = false
+	local seenPartner = false
+	for i = 1, #incoming do
+		if partner[i] then
 			matched = true
-		elseif matched then
-			newer[#newer + 1] = incoming[i]
-		else
-			older[#older + 1] = incoming[i]
+			seenPartner = true
+			if not firstJ or partner[i] < firstJ then
+				firstJ = partner[i]
+			end
+			if not lastJ or partner[i] > lastJ then
+				lastJ = partner[i]
+			end
+		elseif seenPartner then
+			continues = true
 		end
 	end
 
@@ -292,13 +590,74 @@ function Ledger.MergeStream(guild, stream, incoming)
 		for i = 1, #incoming do
 			appendRow(guild, stream, incoming[i])
 		end
+		Ledger.PreferTimestamps(guild)
 		return #incoming, true
+	end
+
+	-- A saved line the scan did not use, sitting between two lines it did
+	-- recognize, is an extra copy when it repeats one of those lines.
+	-- The same applies past the last recognized line when the scan has
+	-- moved on. Lines before the overlap have scrolled off and stay.
+	-- An identical line sitting directly beside its match stays: one read
+	-- can hold two real deposits of the same amount.
+	local function repeatCopy(j)
+		if used[j] then
+			return false
+		end
+		for u = 1, #stored do
+			if used[u] and sameLine(stored[u], stored[j]) and math.abs(u - j) > 1 then
+				return true
+			end
+		end
+		return false
+	end
+	local covered = {}
+	if firstJ and lastJ then
+		for j = firstJ + 1, lastJ - 1 do
+			if repeatCopy(j) then
+				covered[stored[j]] = true
+			end
+		end
+	end
+	if continues and lastJ then
+		for j = lastJ + 1, #stored do
+			if repeatCopy(j) then
+				covered[stored[j]] = true
+			end
+		end
+	end
+	if next(covered) then
+		local kept = {}
+		for i = 1, #guild.txns do
+			if not covered[guild.txns[i]] then
+				kept[#kept + 1] = guild.txns[i]
+			end
+		end
+		guild.txns = kept
+	end
+
+	local older = {}
+	local newer = {}
+	local seen = false
+	for i = 1, #incoming do
+		if partner[i] then
+			seen = true
+		elseif not seen then
+			-- The log is cut off above this line. A drifted re-read of a line
+			-- already saved is not stored again. A line we have never saved is.
+			if not sameLineAny(stored, incoming[i]) then
+				older[#older + 1] = incoming[i]
+			end
+		else
+			newer[#newer + 1] = incoming[i]
+		end
 	end
 
 	prependRows(guild, stream, older)
 	for i = 1, #newer do
 		appendRow(guild, stream, newer[i])
 	end
+	Ledger.PreferTimestamps(guild)
 	return #older + #newer, false
 end
 
@@ -314,6 +673,9 @@ function Ledger.CollapseDuplicates(guild)
 		local duplicate = false
 		for j = 1, #kept do
 			if kept[j].stream == txn.stream and sameEvent(kept[j], txn) then
+				if hasClock(txn) and not hasClock(kept[j]) then
+					kept[j] = txn
+				end
 				duplicate = true
 				break
 			end
