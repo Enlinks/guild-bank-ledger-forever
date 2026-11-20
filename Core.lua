@@ -72,6 +72,14 @@ function GBLF.InitDB()
 				local noun = faded == 1 and "date-only copy of a timed line" or "date-only copies of timed lines"
 				GBLF.Print("Removed " .. faded .. " " .. noun .. " from " .. (guild.name or key) .. ".")
 			end
+			if not guild.requiredNames then
+				local removed = GBLF.Ledger.DropNameless(guild)
+				guild.requiredNames = true
+				if removed > 0 then
+					local noun = removed == 1 and "line with no character name" or "lines with no character name"
+					GBLF.Print("Removed " .. removed .. " " .. noun .. " from " .. (guild.name or key) .. ".")
+				end
+			end
 		end
 	end
 	GBLF.caches = {}
@@ -147,6 +155,89 @@ function GBLF.TouchGuild(key, name, realm)
 	return guild
 end
 
+local function ledgerTitle(guild, key)
+	local name = (guild and guild.name) or key or ""
+	local realm = guild and guild.realm or ""
+	if realm ~= "" then
+		return name .. " · " .. realm
+	end
+	return name
+end
+
+function GBLF.MergeGuilds(targetKey, sourceKey, removeSource)
+	local db = GBLF.DB()
+	if not db or type(db.guilds) ~= "table" then
+		return nil, "There is no ledger to merge into."
+	end
+	if targetKey == sourceKey then
+		return nil, "A ledger cannot be merged into itself."
+	end
+	local target = db.guilds[targetKey]
+	local source = db.guilds[sourceKey]
+	if not target or not source then
+		return nil, "That ledger is no longer saved."
+	end
+	local added, seen = GBLF.Ledger.MergeGuild(target, source)
+	if not added then
+		return nil, seen
+	end
+	if removeSource then
+		db.guilds[sourceKey] = nil
+		GBLF.Invalidate(sourceKey)
+		if db.settings and db.settings.viewKey == sourceKey then
+			db.settings.viewKey = targetKey
+		end
+	end
+	GBLF.Invalidate(targetKey)
+	GBLF.CacheFor(targetKey)
+	local kept = ledgerTitle(target, targetKey)
+	local tail = removeSource and "The other ledger was removed." or "Both ledgers were kept."
+	local message
+	if added == 0 then
+		message = string.format("No new lines for %s. %s", kept, tail)
+	elseif added == 1 then
+		message = string.format("Merged 1 line into %s. %s", kept, tail)
+	else
+		message = string.format("Merged %d lines into %s. %s", added, kept, tail)
+	end
+	GBLF.Print(message)
+	if GBLF.UI and GBLF.UI.Refresh then
+		GBLF.UI.Refresh()
+	end
+	return added, seen
+end
+
+function GBLF.BackupGuild(key)
+	local db = GBLF.DB()
+	if not db or type(db.guilds) ~= "table" or not db.guilds[key] then
+		return nil, "This guild has no saved ledger."
+	end
+	local guild = db.guilds[key]
+	local name = guild.name
+	if type(name) ~= "string" or name == "" then
+		return nil, "That ledger has no guild name to back up."
+	end
+	local stamp = GBLF.Now()
+	local day = GBLF.Time.IsoDay(GBLF.Time.Pack(stamp.year, stamp.month, stamp.day))
+	local base = string.format("backup-%s-%02d:%02d:%02d", day, stamp.hour or 0, stamp.min or 0, stamp.sec or 0)
+	local realm = base
+	local try = 1
+	while db.guilds[name .. "-" .. realm] do
+		try = try + 1
+		realm = base .. "-" .. try
+	end
+	local backupKey = name .. "-" .. realm
+	local copy = GBLF.Ledger.CopyGuild(guild, realm)
+	db.guilds[backupKey] = copy
+	GBLF.Invalidate(backupKey)
+	GBLF.CacheFor(backupKey)
+	GBLF.Print("Saved a backup as " .. ledgerTitle(copy, backupKey) .. ".")
+	if GBLF.UI and GBLF.UI.Refresh then
+		GBLF.UI.Refresh()
+	end
+	return backupKey
+end
+
 function GBLF.DeleteGuild(key)
 	local db = GuildBankLedgerForeverDB
 	if not db.guilds[key] then
@@ -163,16 +254,38 @@ function GBLF.DeleteGuild(key)
 	end
 end
 
+local function secondsFromServer()
+	local unix = GetServerTime and GetServerTime() or nil
+	if not unix and time then
+		local ok, value = pcall(time)
+		if ok then
+			unix = value
+		end
+	end
+	if date and unix then
+		local stamp = date("*t", unix)
+		if stamp and stamp.sec then
+			return stamp.sec
+		end
+	end
+	return nil
+end
+
 function GBLF.Now()
 	if C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime then
 		local stamp = C_DateAndTime.GetCurrentCalendarTime()
 		if stamp and stamp.year and stamp.month and stamp.monthDay then
+			local sec = stamp.second or stamp.seconds or stamp.sec
+			if sec == nil then
+				sec = secondsFromServer() or 0
+			end
 			return {
 				year = stamp.year,
 				month = stamp.month,
 				day = stamp.monthDay,
 				hour = stamp.hour or 0,
 				min = stamp.minute or 0,
+				sec = sec,
 			}
 		end
 	end
@@ -186,10 +299,11 @@ function GBLF.Now()
 				day = stamp.day,
 				hour = stamp.hour or 0,
 				min = stamp.min or 0,
+				sec = stamp.sec or 0,
 			}
 		end
 	end
-	return { year = 2026, month = 1, day = 1, hour = 0, min = 0 }
+	return { year = 2026, month = 1, day = 1, hour = 0, min = 0, sec = 0 }
 end
 
 function GBLF.TabLabel(guild, tab)
@@ -214,7 +328,7 @@ function GBLF.FormatMoneyCompact(copper)
 	local rest = copper % 100
 	local text
 	if gold > 0 then
-		text = string.format("%dg %02ds", gold, silver)
+		text = string.format("%dg %02ds %02dc", gold, silver, rest)
 	elseif silver > 0 then
 		text = string.format("%ds %02dc", silver, rest)
 	else

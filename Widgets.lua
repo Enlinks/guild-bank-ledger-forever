@@ -22,18 +22,93 @@ GBLF.Theme = {
 
 local Theme = GBLF.Theme
 
-local BACKDROP = {
-	bgFile = "Interface\\Buttons\\WHITE8X8",
-	edgeFile = "Interface\\Buttons\\WHITE8X8",
-	edgeSize = 1,
-	insets = { left = 1, right = 1, top = 1, bottom = 1 },
-}
+-- A one-pixel backdrop edge is snapped away on some buttons, so the line is its own texture.
+local function pixel(frame)
+	local scale = 1
+	if frame.GetEffectiveScale then
+		local ok, value = pcall(frame.GetEffectiveScale, frame)
+		if ok and type(value) == "number" and value > 0 then
+			scale = value
+		end
+	end
+	local size = 1 / scale
+	if size < 1 then
+		size = 1
+	end
+	return size
+end
+
+local function colorTexture(texture, color)
+	texture:SetTexture("Interface\\Buttons\\WHITE8X8")
+	texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+end
+
+local function layoutChrome(frame)
+	local px = pixel(frame)
+	local bg = frame.gblfBg
+	bg:ClearAllPoints()
+	bg:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+	bg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
+	local top, bottom, left, right = frame.gblfEdges[1], frame.gblfEdges[2], frame.gblfEdges[3], frame.gblfEdges[4]
+	top:ClearAllPoints()
+	top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+	top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+	top:SetHeight(px)
+	bottom:ClearAllPoints()
+	bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+	bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+	bottom:SetHeight(px)
+	left:ClearAllPoints()
+	left:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -px)
+	left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, px)
+	left:SetWidth(px)
+	right:ClearAllPoints()
+	right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -px)
+	right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, px)
+	right:SetWidth(px)
+end
+
+local function ensureChrome(frame)
+	if frame.gblfBg then
+		return
+	end
+	local bg = frame:CreateTexture(nil, "BACKGROUND")
+	frame.gblfBg = bg
+	local edges = {}
+	for index = 1, 4 do
+		local edge = frame:CreateTexture(nil, "BORDER")
+		if edge.SetSnapToPixelGrid then
+			edge:SetSnapToPixelGrid(false)
+		end
+		if edge.SetTexelSnappingBias then
+			edge:SetTexelSnappingBias(0)
+		end
+		edges[index] = edge
+	end
+	if bg.SetSnapToPixelGrid then
+		bg:SetSnapToPixelGrid(false)
+	end
+	if bg.SetTexelSnappingBias then
+		bg:SetTexelSnappingBias(0)
+	end
+	frame.gblfEdges = edges
+	if frame.HookScript then
+		frame:HookScript("OnShow", layoutChrome)
+		frame:HookScript("OnSizeChanged", layoutChrome)
+	end
+	if frame.SetBackdrop then
+		pcall(frame.SetBackdrop, frame, nil)
+	end
+end
 
 local function paint(frame, bg, border)
-	frame:SetBackdrop(BACKDROP)
-	frame:SetBackdropColor(bg[1], bg[2], bg[3], bg[4] or 1)
+	ensureChrome(frame)
+	colorTexture(frame.gblfBg, bg)
 	local edge = border or Theme.border
-	frame:SetBackdropBorderColor(edge[1], edge[2], edge[3], edge[4] or 1)
+	for index = 1, 4 do
+		colorTexture(frame.gblfEdges[index], edge)
+	end
+	layoutChrome(frame)
 end
 
 function Widgets.Paint(frame, kind)
@@ -165,7 +240,11 @@ function Widgets.Edit(parent, width, height)
 		end
 	end)
 	box:SetScript("OnEditFocusGained", function(self)
-		self:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+		if self.gblfEdges then
+			for index = 1, 4 do
+				colorTexture(self.gblfEdges[index], Theme.border)
+			end
+		end
 	end)
 	return box
 end

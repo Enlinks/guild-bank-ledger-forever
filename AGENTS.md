@@ -19,6 +19,8 @@ Ledgers live in `GuildBankLedgerForeverDB`, one entry per `GuildName-Realm`. A f
 
 Closing the bank aborts a scan that has not finished, and those captured lines are discarded. Tab names can be saved during the scan, before the lines are merged.
 
+A saved line has a character name. Scan does not store a row whose name is still blank. It waits for a later log update, and the query timeout saves only the rows that have names. Import refuses a blank character. The first load drops lines whose name is missing, blank, or the placeholder `Unknown`, then sets `requiredNames` so a later character literally named Unknown is kept.
+
 Out includes withdrawals and tab purchases. The log's purchase notice is not stored. The withdrawal for the tab is kept. Repairs stay separate. Moves and deposit summaries are listed and left out of the totals. Money and each item tab are separate streams in one saved list. A line matches the saved line with the same line above it and the same line below it, in that stream. The clock time is not part of that match. The first time saved stays. A line at either end of a scan is not given a new copy when only the time moved. Lines that have scrolled off the log stay as captured.
 
 ## Checks
@@ -35,7 +37,8 @@ Do not claim an in-game check passed unless it was actually done. Say when a cha
 
 ## Boundaries
 
-- Import accepts a Transactions export, including a hand-written one. Guild and realm may be blank, and the guild open in the window receives the lines. Lines already saved stay as they are, and an export that names another guild is refused. Character and item totals are not imported.
+- Import accepts a Transactions export, including a hand-written one. Guild and realm may be blank, and the guild open in the window receives the lines. Character is required. Lines already saved stay as they are, and an export that names another guild is refused. Character and item totals are not imported.
+- Two saved ledgers can be merged by hand from Settings. The ledger on screen keeps its name, realm, and key. The other ledger's lines are matched into it. Both ledgers stay unless the merge pop-up's checkbox is checked. Backup saves a copy whose realm is `backup-YYYY-MM-DD-HH:MM:SS`, using the guild name in the key. A second backup in that same second gets `-2` on the end. A blank realm does not retarget a scan or a watch onto an older key.
 - Release notes in `CHANGELOG.md` follow Cisco caveat style. A bug found in a shipped release is added to that release as an open caveat. When a later release fixes it, the earlier note stays and names the release that resolved it.
 - A transaction export keeps the newest 5,000 lines.
 - There is no sync between accounts. Characters on the same WoW account share one save.

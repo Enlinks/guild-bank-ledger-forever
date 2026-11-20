@@ -26,11 +26,11 @@ Open the guild bank and press Scan, or type `/scan`. With the default settings t
 
 **Dates** is the same ledger, one day at a time.
 
-**Export** fills a box you can copy with Ctrl+C. Transactions, character totals, or item totals. More than 5,000 lines keeps the newest 5,000, oldest of those first.
+**Export** fills a box you can copy with Ctrl+C. Opening that tab clears the box. Press Transactions, Characters, or Items for the guild you are viewing. More than 5,000 lines keeps the newest 5,000, oldest of those first.
 
 **Import** is on that same page. Press Transactions once and copy the header row. Under it, paste only the lines you want to add, then press Import. The whole log can be pasted again. Lines already saved stay as they are.
 
-The lines join the guild open in the window. Leave `guild` and `realm` blank. Those cells are not stored on the line. The next Transactions export fills them from that guild. If you do fill them in, every row has to name that same guild, and it has to be the guild on screen. The realm is the game realm with the spaces removed. Log into that guild on this account once before the first import. Character totals and item totals cannot be imported.
+The lines join the guild open in the window. Leave `guild` and `realm` blank. Those cells are not stored on the line. The next Transactions export fills them from that guild. If you do fill them in, every row has to name that same guild, and it has to be the guild on screen. The realm is the game realm with the spaces removed. Log into that guild on this account once before the first import. Every line needs a character. A blank name is refused, and nothing from that paste is saved. Character totals and item totals cannot be imported.
 
 A line with the same person, action, and amount as one already saved is kept as that saved line.
 
@@ -39,7 +39,7 @@ A line with the same person, action, and amount as one already saved is kept as 
 | `day` | Required. `YYYY-MM-DD`, a real calendar day. |
 | `hour` | Blank, or a whole number from 0 to 23. 0 is midnight. |
 | `precision` | `hour`, `day`, `month`, or `year`. Blank means `day`. Use `hour` when the hour is filled in. |
-| `character` | Any name. Blank is allowed. |
+| `character` | Required. The character who did it. Blank is refused. |
 | `action` | `deposit`, `withdraw`, `move`, `repair`, `withdrawForTab`, or `depositSummary`. `withdrawal` is also accepted and means a withdrawal. Do not use `buyTab`. That is the purchase sentence. A tab purchase is `withdrawForTab`. |
 | `item_id` | Blank for gold. For an item, a whole number of 1 or more. |
 | `item_name` | Blank, or the item's name. |
@@ -54,11 +54,11 @@ A line with the same person, action, and amount as one already saved is kept as 
 
 A deposit summary is listed and left out of the totals. A move is listed and left out of the item totals. `withdrawForTab` counts as gold out and as a tab purchase.
 
-**Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Delete removes that guild's ledger from this account.
+**Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Click a guild to view it. Backup this ledger saves a copy. The copy keeps the guild name, and its realm is `backup-` plus the date and time, down to the second, such as `backup-2026-11-20-14:05:09`. Two backups in the same second get a number on the end. Merge into this one folds another saved ledger into the guild you are viewing and keeps both, so you can compare them. The pop-up has a box you can check to delete the other ledger. That box starts unchecked. The name and realm you are viewing stay as they are. Nothing is merged on its own. Delete removes the ledger you are viewing from this account.
 
 ## How the log is kept
 
-Each item tab, and the money log, is its own list. A scan is the slice the game still has, usually a few dozen lines. A line already saved stays when the line above it and the line below it are the same. Lines after that overlap are added. The first scan of a tab is not treated as a hole.
+Each item tab, and the money log, is its own list. A scan is the slice the game still has, usually a few dozen lines. A line is saved only when it has a character name. The scan waits for the log to fill that name in, and leaves the line out if the name never arrives. The next login removes lines already saved with no name, including the placeholder Unknown. Those lines repeated ones that already named the character. A character who is actually named Unknown can be added after that. A line already saved stays when the line above it and the line below it are the same. Lines after that overlap are added. The first scan of a tab is not treated as a hole.
 
 The game usually says "3 days ago", not the hour. A clock time is kept when the log's age was in hours. A later scan is the same line when the line above it and the line below it are the same people, actions, and amounts, even if the clock time moved. Money and each item tab are matched as their own log. The lines at the two ends of a scan have only one neighbor, so a re-read there stays on the time already saved. History that has scrolled off the log is left as it was captured. A `≈` in front of a date means the log only gave a month or a year.
 

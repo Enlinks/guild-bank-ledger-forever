@@ -24,6 +24,7 @@ function Ledger.NewGuild(name, realm)
 		tabNames = {},
 		lastScan = nil,
 		deduped = true,
+		requiredNames = true,
 	}
 end
 
@@ -661,6 +662,131 @@ function Ledger.MergeStream(guild, stream, incoming)
 	return #older + #newer, false
 end
 
+local function copyScanRow(txn)
+	return {
+		action = txn.action,
+		who = txn.who,
+		day = txn.day,
+		hour = txn.hour,
+		precision = txn.precision,
+		itemID = txn.itemID,
+		itemName = txn.itemName,
+		count = txn.count,
+		copper = txn.copper,
+		tab = txn.tab,
+		dest = txn.dest,
+		summary = txn.summary,
+		stream = txn.stream,
+	}
+end
+
+local function stampRank(stamp)
+	if type(stamp) ~= "table" then
+		return -1
+	end
+	return ((stamp.year or 0) * 10000000000)
+		+ ((stamp.month or 0) * 100000000)
+		+ ((stamp.day or 0) * 1000000)
+		+ ((stamp.hour or 0) * 10000)
+		+ ((stamp.min or 0) * 100)
+		+ (stamp.sec or 0)
+end
+
+local function copyStamp(stamp)
+	if type(stamp) ~= "table" then
+		return nil
+	end
+	return {
+		year = stamp.year,
+		month = stamp.month,
+		day = stamp.day,
+		hour = stamp.hour,
+		min = stamp.min,
+		sec = stamp.sec,
+	}
+end
+
+-- Fold source into target. Target keeps its name and realm. Source is left
+-- as it was. Returns added, seen. On failure added is nil.
+function Ledger.MergeGuild(target, source)
+	if type(target) ~= "table" or type(target.txns) ~= "table" then
+		return nil, "There is no ledger to merge into."
+	end
+	if type(source) ~= "table" or type(source.txns) ~= "table" then
+		return nil, "That ledger has nothing to merge."
+	end
+	if target == source then
+		return nil, "A ledger cannot be merged into itself."
+	end
+
+	local byStream = {}
+	local order = {}
+	for i = 1, #source.txns do
+		local txn = source.txns[i]
+		local stream = txn.stream or ""
+		local list = byStream[stream]
+		if not list then
+			list = {}
+			byStream[stream] = list
+			order[#order + 1] = stream
+		end
+		list[#list + 1] = copyScanRow(txn)
+	end
+
+	local added = 0
+	for i = 1, #order do
+		local gained = Ledger.MergeStream(target, order[i], byStream[order[i]])
+		added = added + (gained or 0)
+	end
+
+	if type(source.tabNames) == "table" then
+		target.tabNames = type(target.tabNames) == "table" and target.tabNames or {}
+		for tab, name in pairs(source.tabNames) do
+			local have = target.tabNames[tab]
+			if type(name) == "string" and name ~= "" and (type(have) ~= "string" or have == "") then
+				target.tabNames[tab] = name
+			end
+		end
+	end
+
+	if stampRank(source.lastScan) > stampRank(target.lastScan) then
+		target.lastScan = copyStamp(source.lastScan)
+	end
+	return added, #source.txns
+end
+
+local function copyFields(row)
+	local out = {}
+	for key, value in pairs(row) do
+		if type(value) ~= "table" then
+			out[key] = value
+		end
+	end
+	return out
+end
+
+-- A separate ledger with the same lines. Later edits do not change the original.
+function Ledger.CopyGuild(guild, realm)
+	local copy = Ledger.NewGuild(guild.name, realm)
+	for i = 1, #guild.txns do
+		copy.txns[i] = copyFields(guild.txns[i])
+	end
+	copy.nextId = guild.nextId or (#copy.txns + 1)
+	copy.nextOrd = guild.nextOrd or copy.nextId
+	if type(guild.gaps) == "table" then
+		for i = 1, #guild.gaps do
+			copy.gaps[i] = copyFields(guild.gaps[i])
+		end
+	end
+	if type(guild.tabNames) == "table" then
+		for tab, name in pairs(guild.tabNames) do
+			copy.tabNames[tab] = name
+		end
+	end
+	copy.lastScan = copyStamp(guild.lastScan)
+	return copy
+end
+
 -- Drop a later line that is the same event as an earlier one in that stream.
 -- One read can still record two identical actions. This only repairs a copy
 -- that a later scan stored again.
@@ -690,6 +816,25 @@ function Ledger.CollapseDuplicates(guild)
 	return removed
 end
 
+-- Older scans stored a blank log name as "Unknown". The name never matched
+-- the real line, so the gold and items were counted twice. This runs once.
+-- A character who is actually named Unknown is kept after that.
+function Ledger.DropNameless(guild)
+	local kept = {}
+	local removed = 0
+	for i = 1, #guild.txns do
+		local who = guild.txns[i].who
+		local blank = type(who) ~= "string" or string.match(who, "^%s*$") ~= nil
+		if blank or who == "Unknown" then
+			removed = removed + 1
+		else
+			kept[#kept + 1] = guild.txns[i]
+		end
+	end
+	guild.txns = kept
+	return removed
+end
+
 local function charRow(cache, who)
 	local row = cache.characters[who]
 	if not row then
@@ -704,6 +849,19 @@ local function charRow(cache, who)
 		cache.characters[who] = row
 	end
 	return row
+end
+
+local function namedRow(cache, who)
+	if type(who) ~= "string" or string.match(who, "^%s*$") then
+		return nil
+	end
+	return charRow(cache, who)
+end
+
+local function give(row, field, amount)
+	if row then
+		row[field] = row[field] + amount
+	end
 end
 
 local function itemRow(cache, txn)
@@ -770,38 +928,38 @@ function Ledger.Rebuild(guild)
 		if txn.summary then
 			-- A deposit summary repeats money that individual lines already count.
 		elseif txn.copper and txn.copper ~= 0 then
-			local who = charRow(cache, txn.who or "Unknown")
+			local who = namedRow(cache, txn.who)
 			if txn.action == "deposit" then
 				cache.goldIn = cache.goldIn + txn.copper
-				who.goldIn = who.goldIn + txn.copper
+				give(who, "goldIn", txn.copper)
 				day.goldIn = day.goldIn + txn.copper
 			elseif txn.action == "repair" then
 				cache.repairs = cache.repairs + txn.copper
-				who.repair = who.repair + txn.copper
+				give(who, "repair", txn.copper)
 				day.repair = day.repair + txn.copper
 			elseif txn.action == "withdrawForTab" or txn.action == "buyTab" then
 				cache.goldOut = cache.goldOut + txn.copper
 				cache.tabCost = cache.tabCost + txn.copper
-				who.goldOut = who.goldOut + txn.copper
+				give(who, "goldOut", txn.copper)
 				day.goldOut = day.goldOut + txn.copper
 				day.tabCost = day.tabCost + txn.copper
 			elseif txn.action == "withdraw" then
 				cache.goldOut = cache.goldOut + txn.copper
-				who.goldOut = who.goldOut + txn.copper
+				give(who, "goldOut", txn.copper)
 				day.goldOut = day.goldOut + txn.copper
 			end
 		end
 		if not txn.summary and txn.count and txn.count ~= 0 and txn.action ~= "move" then
-			local who = charRow(cache, txn.who or "Unknown")
+			local who = namedRow(cache, txn.who)
 			local item = itemRow(cache, txn)
 			if txn.action == "deposit" then
 				cache.itemIn = cache.itemIn + txn.count
-				who.itemIn = who.itemIn + txn.count
+				give(who, "itemIn", txn.count)
 				item.itemIn = item.itemIn + txn.count
 				day.itemIn = day.itemIn + txn.count
 			elseif txn.action == "withdraw" then
 				cache.itemOut = cache.itemOut + txn.count
-				who.itemOut = who.itemOut + txn.count
+				give(who, "itemOut", txn.count)
 				item.itemOut = item.itemOut + txn.count
 				day.itemOut = day.itemOut + txn.count
 			end
@@ -1151,9 +1309,9 @@ function Ledger.ImportTransactions(guild, text)
 			end
 		end
 
-		local who = cell(fields, header.character)
+		local who = trim(cell(fields, header.character))
 		if who == "" then
-			who = nil
+			return nil, nil, fail("needs a character.")
 		end
 		local itemName = cell(fields, header.item_name)
 		if itemName == "" then

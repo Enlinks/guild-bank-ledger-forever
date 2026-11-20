@@ -660,6 +660,63 @@ eq(added, nil, "a bad row imports nothing")
 eq(#brokenGuild.txns, 0, "a bad row does not keep earlier lines")
 eq(type(string.find(err, "Line 3", 1, true)), "number", "the error names the bad line")
 
+local function txnHeader()
+	return joinRow({
+		"day", "hour", "precision", "character", "action",
+		"item_id", "item_name", "count", "copper", "tab",
+		"destination_tab", "stream",
+	})
+end
+
+local blankChar = Ledger.NewGuild("OLYMPUS", "Realm")
+added, seen, err = Ledger.ImportTransactions(blankChar, txnHeader() .. "\n" .. joinRow({
+	"2026-10-01", "", "day", "", "deposit",
+	"", "", "", "10", "", "", "money",
+}) .. "\n" .. joinRow({
+	"2026-10-01", "", "day", "Ada", "deposit",
+	"", "", "", "20", "", "", "money",
+}))
+eq(added, nil, "a blank character is refused")
+eq(#blankChar.txns, 0, "a blank character writes nothing")
+eq(type(string.find(err, "needs a character", 1, true)), "number", "the error asks for a character")
+
+local spaceChar = Ledger.NewGuild("OLYMPUS", "Realm")
+added, seen, err = Ledger.ImportTransactions(spaceChar, txnHeader() .. "\n" .. joinRow({
+	"2026-10-01", "", "day", "   ", "deposit",
+	"", "", "", "10", "", "", "money",
+}))
+eq(added, nil, "spaces are not a character")
+eq(#spaceChar.txns, 0, "a blank character name writes nothing")
+
+local namedUnknown = Ledger.NewGuild("OLYMPUS", "Realm")
+added = Ledger.ImportTransactions(namedUnknown, txnHeader() .. "\n" .. joinRow({
+	"2026-10-01", "", "day", "Unknown", "deposit",
+	"", "", "", "10", "", "", "money",
+}))
+eq(added, 1, "a character named Unknown can be imported")
+eq(namedUnknown.txns[1].who, "Unknown", "that name is kept as written")
+
+local ghost = Ledger.NewGuild("OLYMPUS", "Realm")
+ghost.txns = {
+	{ id = 1, ord = 1, stream = "money", action = "deposit", who = "Ada", day = day, precision = "day", copper = 100 },
+	{ id = 2, ord = 2, stream = "money", action = "deposit", who = nil, day = day, precision = "day", copper = 50 },
+	{ id = 3, ord = 3, stream = "money", action = "deposit", who = "Unknown", day = day, precision = "day", copper = 25 },
+	{ id = 4, ord = 4, stream = "money", action = "deposit", who = "", day = day, precision = "day", copper = 5 },
+	{ id = 5, ord = 5, stream = "tab:1", action = "withdraw", who = "Unknown", day = day, precision = "day", itemID = 1, itemName = "Linen Cloth", count = 2 },
+}
+local ghostCache = Ledger.Rebuild(ghost)
+eq(ghostCache.characters.Ada.goldIn, 100, "a named deposit stays on that character")
+eq(ghostCache.characters.Unknown.goldIn, 25, "the placeholder still totals until it is removed")
+eq(ghostCache.goldIn, 180, "a missing name does not drop the guild total")
+eq(ghostCache.characters[""], nil, "a blank name is not a character")
+removed = Ledger.DropNameless(ghost)
+eq(removed, 4, "blank names and the placeholder are removed")
+eq(#ghost.txns, 1, "the named line stays")
+eq(ghost.txns[1].who, "Ada", "Ada is the line that stays")
+eq(Ledger.Rebuild(ghost).goldIn, 100, "the removed lines leave the total")
+eq(Ledger.Rebuild(ghost).characters.Unknown, nil, "Unknown is gone from the totals")
+eq(Ledger.Rebuild(ghost).itemOut, 0, "the placeholder item line is gone")
+
 local crlfGuild = Ledger.NewGuild("OLYMPUS", "Realm")
 added = Ledger.ImportTransactions(crlfGuild, string.gsub(sampleCsv, "\n", "\r\n"))
 eq(added, 1, "Windows line endings import")
@@ -759,6 +816,149 @@ eq(Ledger.CollapseTabPairs(timedFirst), 1, "a timed notice upgrades the saved wi
 eq(#timedFirst.txns, 1, "the upgraded withdrawal is the only tab line")
 eq(timedFirst.txns[1].hour, 21, "the withdrawal takes the clock time")
 eq(timedFirst.txns[1].precision, "hour", "the withdrawal is timed after the upgrade")
+
+local keeper = Ledger.NewGuild("Guild", "Realm")
+Ledger.MergeStream(keeper, "money", {
+	line("Ada", "deposit", day, { copper = 100 }),
+	line("Bea", "withdraw", day, { copper = 50 }),
+})
+Ledger.MergeStream(keeper, "tab:1", {
+	line("Ada", "deposit", day, { itemID = 1, itemName = "Linen", count = 2, tab = 1 }),
+})
+keeper.tabNames[1] = "Tab 1"
+keeper.lastScan = { year = 2026, month = 11, day = 20, hour = 12, min = 29 }
+local other = Ledger.NewGuild("Guild", "")
+Ledger.MergeStream(other, "money", {
+	line("Bea", "withdraw", day, { copper = 50 }),
+	line("Cal", "deposit", day, { copper = 25 }),
+})
+other.tabNames[1] = "Herbs"
+other.tabNames[2] = "Bank"
+other.lastScan = { year = 2026, month = 11, day = 20, hour = 12, min = 48 }
+local merged, seen = Ledger.MergeGuild(keeper, other)
+eq(merged, 1, "merge adds only the new line")
+eq(seen, 2, "merge sees the other ledger")
+eq(names(keeper, "money"), "Ada,Bea,Cal", "merged money stays in order")
+eq(names(keeper, "tab:1"), "Ada", "the kept item line stays one")
+eq(keeper.name, "Guild", "merge keeps the ledger name")
+eq(keeper.realm, "Realm", "merge keeps the ledger realm")
+eq(keeper.tabNames[1], "Tab 1", "an existing tab name stays")
+eq(keeper.tabNames[2], "Bank", "a missing tab name is filled")
+eq(keeper.lastScan.min, 48, "the later scan time is kept")
+eq(keeper.lastScan == other.lastScan, false, "the scan time is copied")
+eq(names(other, "money"), "Bea,Cal", "the other ledger is left intact")
+eq(Ledger.Rebuild(keeper).goldIn, 125, "merged gold counts once")
+local snapshot = Ledger.CopyGuild(keeper, "backup-2026-11-20")
+eq(snapshot.realm, "backup-2026-11-20", "a backup uses the realm it was given")
+eq(snapshot.name, keeper.name, "a backup keeps the guild name")
+eq(names(snapshot, "money"), "Ada,Bea,Cal", "a backup has the same lines")
+eq(snapshot.txns[1] == keeper.txns[1], false, "a backup does not share the original lines")
+snapshot.txns[1].copper = 1
+eq(keeper.txns[1].copper, 100, "editing a backup leaves the original")
+merged, seen = Ledger.MergeGuild(keeper, keeper)
+eq(merged, nil, "a ledger is not merged into itself")
+
+CreateFrame = function()
+	return {
+		RegisterEvent = function() end,
+		SetScript = function() end,
+	}
+end
+SlashCmdList = {}
+dofile(dir .. "../Core.lua")
+
+eq(GBLF.FormatMoneyCompact(230000), "23g 00s 00c", "gold keeps silver and copper")
+eq(GBLF.FormatMoneyCompact(1095500), "109g 55s 00c", "gold and silver keep the copper")
+eq(GBLF.FormatMoneyCompact(96350), "9g 63s 50c", "copper stays beside the silver")
+eq(GBLF.FormatMoneyCompact(15000), "1g 50s 00c", "silver is not the last coin")
+eq(GBLF.FormatMoneyCompact(5000), "50s 00c", "silver without gold")
+eq(GBLF.FormatMoneyCompact(0), "0c", "zero copper")
+eq(GBLF.FormatMoneyCompact(-15000), "-1g 50s 00c", "a debit keeps every coin")
+
+GuildBankLedgerForeverDB = {
+	version = 1,
+	settings = {},
+	guilds = {
+		["OLYMPUS-Realm"] = {
+			name = "OLYMPUS",
+			realm = "Realm",
+			txns = {
+				{ id = 1, ord = 1, stream = "money", action = "deposit", who = "Ada", day = day, precision = "day", copper = 100 },
+				{ id = 2, ord = 2, stream = "money", action = "deposit", who = "Unknown", day = day, precision = "day", copper = 50 },
+				{ id = 3, ord = 3, stream = "money", action = "deposit", who = nil, day = day, precision = "day", copper = 7 },
+			},
+			gaps = {},
+			tabNames = {},
+			nextId = 4,
+			nextOrd = 4,
+		},
+	},
+}
+GBLF.dbReady = false
+GBLF.InitDB()
+local cleaned = GuildBankLedgerForeverDB.guilds["OLYMPUS-Realm"]
+eq(#cleaned.txns, 1, "login drops the nameless lines once")
+eq(cleaned.txns[1].who, "Ada", "the named line stays at login")
+eq(cleaned.requiredNames, true, "the cleanup is marked done")
+eq(GBLF.CacheFor("OLYMPUS-Realm").goldIn, 100, "the dropped gold leaves the total")
+cleaned.txns[#cleaned.txns + 1] = {
+	id = 4, ord = 4, stream = "money", action = "deposit", who = "Unknown", day = day, precision = "day", copper = 5,
+}
+GBLF.dbReady = false
+GBLF.InitDB()
+eq(#cleaned.txns, 2, "a later character named Unknown is kept")
+eq(cleaned.txns[2].who, "Unknown", "that later name stays")
+
+local keptGuild = Ledger.NewGuild("Guild", "Realm")
+Ledger.MergeStream(keptGuild, "money", {
+	line("Ada", "deposit", day, { copper = 100 }),
+	line("Bea", "withdraw", day, { copper = 50 }),
+})
+local blankRealm = Ledger.NewGuild("Guild", "")
+Ledger.MergeStream(blankRealm, "money", {
+	line("Bea", "withdraw", day, { copper = 50 }),
+	line("Cal", "deposit", day, { copper = 25 }),
+})
+GuildBankLedgerForeverDB = {
+	version = 1,
+	settings = { viewKey = "Guild-" },
+	guilds = {
+		["Guild-"] = blankRealm,
+		["Guild-Realm"] = keptGuild,
+	},
+}
+GBLF.caches = {}
+local folded, foldSeen = GBLF.MergeGuilds("Guild-Realm", "Guild-")
+eq(folded, 1, "the blank-realm lines fold into the kept ledger")
+eq(foldSeen, 2, "both lines of the other ledger are seen")
+eq(GuildBankLedgerForeverDB.guilds["Guild-"], blankRealm, "both ledgers stay unless asked")
+eq(GuildBankLedgerForeverDB.settings.viewKey, "Guild-", "keeping both leaves the window where it was")
+eq(keptGuild.realm, "Realm", "the kept realm is not replaced")
+eq(names(keptGuild, "money"), "Ada,Bea,Cal", "the kept ledger holds both histories")
+local originalNow = GBLF.Now
+GBLF.Now = function()
+	return { year = 2026, month = 11, day = 20, hour = 12, min = 0, sec = 9 }
+end
+local backupKey = GBLF.BackupGuild("Guild-Realm")
+eq(backupKey, "Guild-backup-2026-11-20-12:00:09", "the backup key uses the date and time")
+local backup = GuildBankLedgerForeverDB.guilds[backupKey]
+eq(backup.realm, "backup-2026-11-20-12:00:09", "the backup realm is the date and time")
+eq(backup.name, "Guild", "the backup keeps the guild name")
+eq(names(backup, "money"), "Ada,Bea,Cal", "the backup holds the ledger")
+eq(GuildBankLedgerForeverDB.settings.viewKey, "Guild-", "a backup does not change the window")
+GBLF.Now = function()
+	return { year = 2026, month = 11, day = 20, hour = 12, min = 0, sec = 10 }
+end
+eq(GBLF.BackupGuild("Guild-Realm"), "Guild-backup-2026-11-20-12:00:10", "the next second is another backup")
+GBLF.Now = function()
+	return { year = 2026, month = 11, day = 20, hour = 12, min = 0, sec = 10 }
+end
+eq(GBLF.BackupGuild("Guild-Realm"), "Guild-backup-2026-11-20-12:00:10-2", "the same second gets a number")
+GBLF.Now = originalNow
+local removed = GBLF.MergeGuilds("Guild-Realm", "Guild-", true)
+eq(removed, 0, "merging again adds nothing new")
+eq(GuildBankLedgerForeverDB.guilds["Guild-"], nil, "the checkbox removes the other ledger")
+eq(GuildBankLedgerForeverDB.settings.viewKey, "Guild-Realm", "deleting the viewed ledger leaves the one that was kept")
 
 if failed > 0 then
 	io.stderr:write(string.format("%d failed\n", failed))

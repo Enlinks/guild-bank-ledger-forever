@@ -42,9 +42,15 @@ local function absolute(value)
 	return value
 end
 
+-- A blank log name is not a character. The row is skipped until a later
+-- update fills the name in. A real name that happens to be Unknown is kept.
 local function person(name)
-	if type(name) ~= "string" or name == "" then
-		return "Unknown"
+	if type(name) ~= "string" then
+		return nil
+	end
+	name = string.match(name, "^%s*(.-)%s*$")
+	if not name or name == "" then
+		return nil
 	end
 	return name
 end
@@ -102,34 +108,40 @@ local function readItems(tab, now)
 		count = GetNumGuildBankTransactions(tab) or 0
 	end
 	local rows = {}
+	local missing = false
 	for index = 1, count do
 		local ok, kind, name, link, stack, origin, destination, years, months, days, hours =
 			pcall(GetGuildBankTransaction, tab, index)
 		if ok and kind and kind ~= "" then
-			local fromOrigin = kind == "move" and origin and origin > 0 and origin ~= tab
-			if not fromOrigin then
-				local itemID = itemIdOf(link)
-				local row = stampRow(now, years, months, days, hours, index)
-				row.action = kind
-				row.who = person(name)
-				row.itemID = itemID
-				row.itemName = itemNameOf(link, itemID)
-				if stack then
-					row.count = absolute(stack)
+			local who = person(name)
+			if not who then
+				missing = true
+			else
+				local fromOrigin = kind == "move" and origin and origin > 0 and origin ~= tab
+				if not fromOrigin then
+					local itemID = itemIdOf(link)
+					local row = stampRow(now, years, months, days, hours, index)
+					row.action = kind
+					row.who = who
+					row.itemID = itemID
+					row.itemName = itemNameOf(link, itemID)
+					if stack then
+						row.count = absolute(stack)
+					end
+					if origin and origin > 0 then
+						row.tab = origin
+					else
+						row.tab = tab
+					end
+					if kind == "move" then
+						row.dest = destination
+					end
+					rows[#rows + 1] = row
 				end
-				if origin and origin > 0 then
-					row.tab = origin
-				else
-					row.tab = tab
-				end
-				if kind == "move" then
-					row.dest = destination
-				end
-				rows[#rows + 1] = row
 			end
 		end
 	end
-	return GBLF.Ledger.OrderScanRows(rows)
+	return GBLF.Ledger.OrderScanRows(rows), missing
 end
 
 local function readMoney(now)
@@ -138,20 +150,26 @@ local function readMoney(now)
 		count = GetNumGuildBankMoneyTransactions() or 0
 	end
 	local rows = {}
+	local missing = false
 	for index = 1, count do
 		local ok, kind, name, amount, years, months, days, hours = pcall(GetGuildBankMoneyTransaction, index)
 		if ok and kind and kind ~= "" then
-			local row = stampRow(now, years, months, days, hours, index)
-			row.action = kind
-			row.who = person(name)
-			row.copper = absolute(amount)
-			if kind == "depositSummary" then
-				row.summary = true
+			local who = person(name)
+			if not who then
+				missing = true
+			else
+				local row = stampRow(now, years, months, days, hours, index)
+				row.action = kind
+				row.who = who
+				row.copper = absolute(amount)
+				if kind == "depositSummary" then
+					row.summary = true
+				end
+				rows[#rows + 1] = row
 			end
-			rows[#rows + 1] = row
 		end
 	end
-	return GBLF.Ledger.OrderScanRows(rows)
+	return GBLF.Ledger.OrderScanRows(rows), missing
 end
 
 local function streamLabel(stream)
@@ -201,7 +219,11 @@ local function finish(token)
 	GBLF.CacheFor(key)
 
 	if not sawLines and added == 0 then
-		GBLF.Print("Scan finished. The bank returned no log lines. You may not be allowed to view them.")
+		if scan.droppedNames then
+			GBLF.Print("Scan finished. The log lines had no character name, so they were left out.")
+		else
+			GBLF.Print("Scan finished. The bank returned no log lines. You may not be allowed to view them.")
+		end
 	elseif #gapStreams > 0 then
 		GBLF.Print(string.format(
 			"%s: added %d lines. The log rolled past on %s, so some older lines are missing. The ledger holds %d.",
@@ -215,16 +237,22 @@ local function finish(token)
 	else
 		GBLF.Print(string.format("%s: added %d lines. The ledger holds %d.", name, added, #guild.txns))
 	end
+	if sawLines and scan.droppedNames then
+		GBLF.Print("Some log lines had no character name and were left out.")
+	end
 	if GBLF.UI then
 		GBLF.UI.Refresh()
 	end
 end
 
-local function acceptAndAdvance()
+local function acceptAndAdvance(unfinished)
 	local token = scan.token
 	local entry = scan.queue[scan.index]
 	if not scan.running or scan.token ~= token or not entry or not scan.waiting then
 		return
+	end
+	if unfinished then
+		scan.droppedNames = true
 	end
 	scan.captured[entry.stream] = scan.latest or {}
 	scan.waiting = nil
@@ -257,6 +285,7 @@ function Scan.QueryCurrent()
 	scan.waiting = entry
 	scan.latest = {}
 	scan.sawRows = false
+	scan.namesMissing = false
 	local queried = pcall(QueryGuildBankLog, entry.tab)
 	if not queried then
 		GBLF.Print("Could not read " .. streamLabel(entry.stream) .. ".")
@@ -267,7 +296,7 @@ function Scan.QueryCurrent()
 		if scan.token ~= token or not scan.running or scan.query ~= qid or not scan.waiting then
 			return
 		end
-		acceptAndAdvance()
+		acceptAndAdvance(scan.namesMissing)
 	end)
 end
 
@@ -277,11 +306,11 @@ function Scan.OnLogUpdate()
 	end
 	local now = GBLF.Now()
 	local entry = scan.waiting
-	local rows
+	local rows, missing
 	if entry.stream == "money" then
-		rows = readMoney(now)
+		rows, missing = readMoney(now)
 	else
-		rows = readItems(entry.tab, now)
+		rows, missing = readItems(entry.tab, now)
 		local guildKey, guildName, realm = GBLF.PlayerGuild()
 		if guildKey and GetGuildBankTabInfo then
 			local ok, tabName = pcall(GetGuildBankTabInfo, entry.tab)
@@ -291,7 +320,17 @@ function Scan.OnLogUpdate()
 			end
 		end
 	end
-	scan.latest = rows
+	-- Names often arrive a moment after the amounts. Keep the named rows and
+	-- wait. The query timeout saves whatever names did arrive. An empty
+	-- follow-up does not wipe rows already captured for this page.
+	scan.namesMissing = missing and true or false
+	if #rows > 0 then
+		scan.latest = rows
+	end
+	if missing then
+		scan.sawRows = true
+		return
+	end
 	if #rows > 0 then
 		scan.sawRows = true
 		acceptAndAdvance()
@@ -300,13 +339,13 @@ function Scan.OnLogUpdate()
 	if scan.sawRows then
 		return
 	end
+	scan.latest = rows
 	local qid = scan.query
 	later(0.8, function()
 		if not scan.running or scan.query ~= qid or not scan.waiting then
 			return
 		end
-		if scan.latest and #scan.latest > 0 then
-			acceptAndAdvance()
+		if scan.namesMissing then
 			return
 		end
 		acceptAndAdvance()
@@ -440,6 +479,8 @@ function Scan.Start(reason)
 	scan.running = true
 	scan.token = scan.token + 1
 	scan.waiting = nil
+	scan.droppedNames = false
+	scan.namesMissing = false
 	local token = scan.token
 	if reason ~= "timer" then
 		GBLF.Print("Reading the guild bank log.")

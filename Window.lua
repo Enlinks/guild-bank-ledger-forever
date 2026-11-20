@@ -29,9 +29,14 @@ local KIND_LABEL = {
 local NOTES = {
 	ledger = "A line is the same one when the lines above and below it match, even if the time moved. Out includes tab purchases. Summary lines are not added into the totals.",
 	dates = "Pick a day to see the lines pinned to it. A mark in front of a day means the log only gave a month or a year.",
-	export = "Click the box and press Ctrl+C. Import pastes a transaction export into the guild you are viewing. A paste can be the header and the new lines only, and guild and realm can be left blank. Lines already saved stay as they are.",
-	settings = "Each guild keeps its own ledger on this account. Other accounts do not see it.",
+	export = "Opening this tab clears the box. Click Transactions, Characters, or Items for the guild you are viewing, then Ctrl+C. Import pastes a transaction export into that guild. A paste can be the header and the new lines only. Guild and realm can be left blank. Character is required. Lines already saved stay as they are.",
+	settings = "Each guild keeps its own ledger on this account. Backup this ledger saves a copy as backup- and the date and time. Merge keeps both ledgers unless you check the box. The name and realm you are viewing stay as they are.",
 }
+
+-- Gold amounts include silver and copper, so the column has to fit "10000g 00s 00c".
+local MONEY_COL = 118
+local LEDGER_LIST_WIDTH = 640
+local LEDGER_SPLIT = LEDGER_LIST_WIDTH + 8
 
 local frame
 local pages
@@ -224,7 +229,7 @@ local function refreshChrome()
 	end
 end
 
-local function showPage(id)
+local function showPage(id, clicked)
 	current = id
 	Widgets.CloseMenu()
 	for key, page in pairs(pages) do
@@ -239,7 +244,7 @@ local function showPage(id)
 	end
 	refreshChrome()
 	if pages[id] then
-		pages[id]:Refresh()
+		pages[id]:Refresh(clicked)
 	end
 end
 
@@ -314,16 +319,16 @@ local function buildLedger(parent)
 	local itemsButton = Widgets.Button(parent, "Items", 72, 22)
 	itemsButton:SetPoint("LEFT", charactersButton, "RIGHT", 6, 0)
 
-	local characterList = Widgets.List(parent, 460, 700, {
-		{ key = "who", text = "Character", width = 120 },
-		{ key = "goldIn", text = "In", width = 84, align = "RIGHT", money = true },
-		{ key = "goldOut", text = "Out", width = 84, align = "RIGHT", money = true },
-		{ key = "repair", text = "Repair", width = 76, align = "RIGHT", money = true },
+	local characterList = Widgets.List(parent, LEDGER_LIST_WIDTH, 700, {
+		{ key = "who", text = "Character", width = 136 },
+		{ key = "goldIn", text = "In", width = MONEY_COL, align = "RIGHT", money = true },
+		{ key = "goldOut", text = "Out", width = MONEY_COL, align = "RIGHT", money = true },
+		{ key = "repair", text = "Repair", width = MONEY_COL, align = "RIGHT", money = true },
 		{ key = "net", text = "Net", flex = true, align = "RIGHT", money = true },
 	})
 	characterList.frame:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", 0, -36)
 	characterList.frame:SetPoint("BOTTOMLEFT", 0, 0)
-	characterList.frame:SetWidth(460)
+	characterList.frame:SetWidth(LEDGER_LIST_WIDTH)
 
 	local itemList = Widgets.List(parent, 400, 700, {
 		{ key = "who", text = "Item", width = 190 },
@@ -335,7 +340,7 @@ local function buildLedger(parent)
 	itemList.frame:SetPoint("BOTTOMRIGHT", characterList.frame, "BOTTOMRIGHT")
 
 	local kindButton = Widgets.Button(parent, "All actions", 110, 22)
-	kindButton:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", 468, -8)
+	kindButton:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", LEDGER_SPLIT, -8)
 	local tabButton = Widgets.Button(parent, "All tabs", 110, 22)
 	tabButton:SetPoint("LEFT", kindButton, "RIGHT", 6, 0)
 	local clearButton = Widgets.Button(parent, "Clear", 52, 22)
@@ -350,9 +355,9 @@ local function buildLedger(parent)
 		{ key = "who", text = "Character", width = 90 },
 		{ key = "action", text = "Action", width = 72 },
 		{ key = "detail", text = "Detail", flex = true },
-		{ key = "amount", text = "Amount", width = 74, align = "RIGHT" },
+		{ key = "amount", text = "Amount", width = MONEY_COL, align = "RIGHT" },
 	})
-	txnList.frame:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", 468, -36)
+	txnList.frame:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", LEDGER_SPLIT, -36)
 	txnList.frame:SetPoint("BOTTOMRIGHT", 0, 0)
 
 	local empty = Widgets.Label(txnList.frame, "body", Theme.muted)
@@ -641,17 +646,17 @@ local function buildDates(parent)
 	local selected = nil
 	local page = { frame = parent }
 
-	local dayList = Widgets.List(parent, 300, 700, {
+	local dayList = Widgets.List(parent, 360, 700, {
 		{ key = "day", text = "Day", flex = true },
-		{ key = "net", text = "Net", width = 80, align = "RIGHT" },
+		{ key = "net", text = "Net", width = MONEY_COL, align = "RIGHT" },
 		{ key = "items", text = "Items", width = 64, align = "RIGHT" },
 	})
 	dayList.frame:SetPoint("TOPLEFT", 0, 0)
 	dayList.frame:SetPoint("BOTTOMLEFT", 0, 0)
-	dayList.frame:SetWidth(300)
+	dayList.frame:SetWidth(360)
 
 	local heading = Widgets.Label(parent, "body", Theme.text)
-	heading:SetPoint("TOPLEFT", 308, -2)
+	heading:SetPoint("TOPLEFT", 368, -2)
 	heading:SetPoint("RIGHT", 0, 0)
 	heading:SetText("No days yet")
 
@@ -659,9 +664,9 @@ local function buildDates(parent)
 		{ key = "who", text = "Character", width = 110 },
 		{ key = "action", text = "Action", width = 72 },
 		{ key = "detail", text = "Detail", flex = true },
-		{ key = "amount", text = "Amount", width = 74, align = "RIGHT" },
+		{ key = "amount", text = "Amount", width = MONEY_COL, align = "RIGHT" },
 	})
-	txnList.frame:SetPoint("TOPLEFT", 308, -24)
+	txnList.frame:SetPoint("TOPLEFT", 368, -24)
 	txnList.frame:SetPoint("BOTTOMRIGHT", 0, 0)
 
 	local function newest(cache)
@@ -861,7 +866,27 @@ local function buildExport(parent)
 		GBLF.Print(message)
 	end
 
-	function page:Refresh()
+	function page:Refresh(clicked)
+		if not clicked then
+			return
+		end
+		edit:ClearFocus()
+		edit:SetText("")
+		edit:SetHeight(200)
+		if scroll.SetVerticalScroll then
+			scroll:SetVerticalScroll(0)
+		end
+		local key, guild = GBLF.ViewGuild()
+		if guild then
+			local label = guild.name or key or "This guild"
+			local realm = guild.realm or ""
+			if realm == "" then
+				realm = "no realm"
+			end
+			note:SetText(label .. " · " .. realm .. ". Click Transactions, Characters, or Items.")
+		else
+			note:SetText("Copy a list, or paste transactions and press Import.")
+		end
 	end
 
 	return page
@@ -919,17 +944,25 @@ local function buildSettings(parent)
 	savedLabel:SetPoint("TOPLEFT", rescanLabel, "BOTTOMLEFT", 0, -18)
 	savedLabel:SetText("Saved guilds")
 
-	local watch = Widgets.Button(parent, "Watch my current guild", 180, 22)
-	watch:SetPoint("TOPRIGHT", 0, -78)
-	local deleteButton = Widgets.Button(parent, "Delete this ledger", 140, 22)
+	local buttonRow = CreateFrame("Frame", nil, parent)
+	buttonRow:SetPoint("TOPLEFT", savedLabel, "BOTTOMLEFT", 0, -8)
+	buttonRow:SetPoint("RIGHT", 0, 0)
+	buttonRow:SetHeight(22)
+	local watch = Widgets.Button(buttonRow, "Watch my current guild", 180, 22)
+	watch:SetPoint("RIGHT", 0, 0)
+	local deleteButton = Widgets.Button(buttonRow, "Delete this ledger", 140, 22)
 	deleteButton:SetPoint("RIGHT", watch, "LEFT", -6, 0)
+	local mergeButton = Widgets.Button(buttonRow, "Merge into this one", 156, 22)
+	mergeButton:SetPoint("RIGHT", deleteButton, "LEFT", -6, 0)
+	local backupButton = Widgets.Button(buttonRow, "Backup this ledger", 150, 22)
+	backupButton:SetPoint("RIGHT", mergeButton, "LEFT", -6, 0)
 
 	local guildList = Widgets.List(parent, 800, 700, {
 		{ key = "name", text = "Guild", flex = true },
 		{ key = "lines", text = "Lines", width = 70, align = "RIGHT" },
 		{ key = "seen", text = "Last scan", width = 180, align = "RIGHT" },
 	})
-	guildList.frame:SetPoint("TOPLEFT", savedLabel, "BOTTOMLEFT", 0, -8)
+	guildList.frame:SetPoint("TOPLEFT", buttonRow, "BOTTOMLEFT", 0, -8)
 	guildList.frame:SetPoint("BOTTOMRIGHT", 0, 28)
 
 	local hint = Widgets.Label(parent, "small", Theme.muted)
@@ -945,6 +978,17 @@ local function buildSettings(parent)
 		return item.key == GBLF.ViewKey()
 	end
 
+	local function ledgerTitle(guild, key)
+		local name = guild.name or key
+		local count = guild.txns and #guild.txns or 0
+		local noun = count == 1 and "line" or "lines"
+		local realm = guild.realm or ""
+		if realm == "" then
+			realm = "no realm"
+		end
+		return string.format("%s · %s (%d %s)", name, realm, count, noun)
+	end
+
 	watch.onClick = function()
 		GBLF.Settings().viewKey = nil
 		local key = GBLF.PlayerGuild()
@@ -954,6 +998,47 @@ local function buildSettings(parent)
 			GBLF.Print("You are not in a guild. Showing whatever you scan next.")
 		end
 		UI.Refresh()
+	end
+	backupButton.onClick = function()
+		local key, guild = GBLF.ViewGuild()
+		if not guild then
+			GBLF.Print("Pick the ledger you want to back up.")
+			return
+		end
+		local backupKey, err = GBLF.BackupGuild(key)
+		if not backupKey then
+			GBLF.Print(err or "That ledger could not be backed up.")
+		end
+	end
+	mergeButton.onClick = function()
+		local key, guild = GBLF.ViewGuild()
+		if not guild then
+			GBLF.Print("Pick the ledger you want to keep, then merge another into it.")
+			return
+		end
+		local choices = {}
+		for _, saved in ipairs(GBLF.SavedGuilds()) do
+			if saved.key ~= key then
+				local other = GuildBankLedgerForeverDB.guilds[saved.key]
+				choices[#choices + 1] = {
+					value = saved.key,
+					text = other and ledgerTitle(other, saved.key) or saved.key,
+				}
+			end
+		end
+		if #choices == 0 then
+			GBLF.Print("There is no other ledger to merge.")
+			return
+		end
+		Widgets.OpenMenu(mergeButton, choices, function(sourceKey)
+			local source = GuildBankLedgerForeverDB.guilds[sourceKey]
+			local currentKey, current = GBLF.ViewGuild()
+			if not source or not current or currentKey ~= key then
+				GBLF.Print("That ledger is no longer saved.")
+				return
+			end
+			UI.ShowMergePopup(ledgerTitle(source, sourceKey), ledgerTitle(current, currentKey), currentKey, sourceKey)
+		end)
 	end
 	deleteButton.onClick = function()
 		local key, guild = GBLF.ViewGuild()
@@ -1074,7 +1159,7 @@ end
 
 local function createWindow()
 	frame = CreateFrame("Frame", "GBLFFrame", UIParent, "BackdropTemplate")
-	frame:SetSize(960, 620)
+	frame:SetSize(1200, 620)
 	frame:SetFrameStrata("HIGH")
 	frame:SetToplevel(true)
 	frame:SetClampedToScreen(true)
@@ -1126,7 +1211,7 @@ local function createWindow()
 		local button = Widgets.Button(frame, tabNames[tabId], 88, 22)
 		button:SetPoint("TOPLEFT", 12 + (index - 1) * 94, -36)
 		button.onClick = function()
-			showPage(tabId)
+			showPage(tabId, true)
 		end
 		tabButtons[tabId] = button
 	end
@@ -1163,6 +1248,63 @@ local function createWindow()
 		Widgets.CloseMenu()
 	end)
 	frame:Hide()
+end
+
+function UI.ShowMergePopup(sourceTitle, targetTitle, targetKey, sourceKey)
+	if not UI.mergePopup then
+		local popup = CreateFrame("Frame", "GBLFMergePopup", UIParent, "BackdropTemplate")
+		popup:SetSize(520, 200)
+		popup:SetFrameStrata("DIALOG")
+		popup:SetToplevel(true)
+		popup:SetClampedToScreen(true)
+		popup:EnableMouse(true)
+		Widgets.Paint(popup, "window")
+		popup:SetPoint("CENTER")
+		local text = Widgets.Label(popup, "body", Theme.text)
+		text:SetPoint("TOPLEFT", 16, -16)
+		text:SetPoint("TOPRIGHT", -16, -16)
+		text:SetJustifyH("LEFT")
+		text:SetJustifyV("TOP")
+		if text.SetWordWrap then
+			text:SetWordWrap(true)
+		end
+		local check = Widgets.Check(popup, "Delete the other ledger")
+		check:SetPoint("BOTTOMLEFT", 16, 52)
+		check.label:SetPoint("LEFT", check, "RIGHT", 6, 0)
+		local cancel = Widgets.Button(popup, "Cancel", 90, 22)
+		cancel:SetPoint("BOTTOMRIGHT", -16, 14)
+		local accept = Widgets.Button(popup, "Merge", 90, 22)
+		accept:SetPoint("RIGHT", cancel, "LEFT", -8, 0)
+		cancel.onClick = function()
+			popup:Hide()
+		end
+		accept.onClick = function()
+			local pickedTarget = popup.targetKey
+			local pickedSource = popup.sourceKey
+			local removeSource = check:GetChecked()
+			popup:Hide()
+			local added, err = GBLF.MergeGuilds(pickedTarget, pickedSource, removeSource)
+			if not added then
+				GBLF.Print(err or "Those ledgers could not be merged.")
+			end
+		end
+		popup.text = text
+		popup.check = check
+		UI.mergePopup = popup
+		if UISpecialFrames then
+			tinsert(UISpecialFrames, "GBLFMergePopup")
+		end
+	end
+	local popup = UI.mergePopup
+	popup.targetKey = targetKey
+	popup.sourceKey = sourceKey
+	popup.check:SetChecked(false)
+	popup.text:SetText(string.format(
+		"Merge %s into %s? The second keeps its name and realm. Lines already saved stay as they are.",
+		sourceTitle,
+		targetTitle
+	))
+	popup:Show()
 end
 
 function UI.Init()
