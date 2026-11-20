@@ -28,7 +28,31 @@ Open the guild bank and press Scan, or type `/scan`. With the default settings t
 
 **Export** fills a box you can copy with Ctrl+C. Transactions, character totals, or item totals. More than 5,000 lines keeps the newest 5,000, oldest of those first.
 
-**Import** is on that same page. Paste a transaction export from the other computer and press Import. It adds those lines to the guild shown in the window. Lines already saved stay as they are, so the same export can be pasted again. An export from a different guild is refused. On a computer that has not scanned yet, log into that guild first. Character and item totals cannot be imported.
+**Import** is on that same page. Press Transactions once and copy the header row. Under it, paste only the lines you want to add, then press Import. The whole log can be pasted again. Lines already saved stay as they are.
+
+The lines join the guild open in the window. Leave `guild` and `realm` blank. Those cells are not stored on the line. The next Transactions export fills them from that guild. If you do fill them in, every row has to name that same guild, and it has to be the guild on screen. The realm is the game realm with the spaces removed. Log into that guild on this account once before the first import. Character totals and item totals cannot be imported.
+
+A line with the same person, action, and amount as one already saved is kept as that saved line.
+
+| Column | Allowed values |
+| --- | --- |
+| `day` | Required. `YYYY-MM-DD`, a real calendar day. |
+| `hour` | Blank, or a whole number from 0 to 23. 0 is midnight. |
+| `precision` | `hour`, `day`, `month`, or `year`. Blank means `day`. Use `hour` when the hour is filled in. |
+| `character` | Any name. Blank is allowed. |
+| `action` | `deposit`, `withdraw`, `move`, `repair`, `withdrawForTab`, or `depositSummary`. `withdrawal` is also accepted and means a withdrawal. Do not use `buyTab`. That is the purchase sentence. A tab purchase is `withdrawForTab`. |
+| `item_id` | Blank for gold. For an item, a whole number of 1 or more. |
+| `item_name` | Blank, or the item's name. |
+| `count` | Blank for gold. For an item, a whole number of how many. |
+| `copper` | Blank for an item line. For gold, a whole number of copper. 1 gold is 10000. 1 silver is 100. Words such as `25s` are refused. |
+| `tab` | Blank for a money line. For an item, the guild bank tab, a whole number of 1 or more. |
+| `destination_tab` | Blank, except a `move`, which names the tab the stack moved to. A whole number of 1 or more. |
+| `stream` | `money`, or `tab:` plus the tab number, such as `tab:1`. This chooses which log the line joins. |
+| `guild` | Optional. Blank uses the guild open in the window. |
+| `realm` | Optional. Blank uses that same guild. |
+| `count_signed`, `copper_signed` | Written by Export and ignored by Import. Leave them out. |
+
+A deposit summary is listed and left out of the totals. A move is listed and left out of the item totals. `withdrawForTab` counts as gold out and as a tab purchase.
 
 **Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Delete removes that guild's ledger from this account.
 
