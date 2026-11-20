@@ -30,7 +30,7 @@ local NOTES = {
 	ledger = "A line is the same one when the lines above and below it match, even if the time moved. Out includes tab purchases. Summary lines are not added into the totals.",
 	dates = "Pick a day to see the lines pinned to it. A mark in front of a day means the log only gave a month or a year.",
 	export = "Opening this tab clears the box. Click Transactions, Characters, or Items for the guild you are viewing, then Ctrl+C. Import pastes a transaction export into that guild. A paste can be the header and the new lines only. Guild and realm can be left blank. Character is required. Lines already saved stay as they are.",
-	settings = "Each guild keeps its own ledger on this account. Backup this ledger saves a copy as backup- and the date and time. Merge keeps both ledgers unless you check the box. The name and realm you are viewing stay as they are.",
+	settings = "A recent game update left the realm name blank and started a second ledger. Back up the one you want to keep, then use Merge into this one. Backup uses backup- and the date and time. Merge keeps both ledgers unless you check the box.",
 }
 
 -- Gold amounts include silver and copper, so the column has to fit "10000g 00s 00c".

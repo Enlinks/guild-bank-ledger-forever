@@ -12,6 +12,12 @@ The folder name has to be `guild-bank-ledger-forever`, the same name as the TOC 
 
 ## Use
 
+A recent game update left the realm name blank. The addon then started a second ledger, and the window follows that one. The older lines are still saved under the previous realm. Nothing is merged on its own.
+
+1. In Settings, click the ledger you want to keep.
+2. Press Backup this ledger. The copy keeps the guild name. Its realm is `backup-` plus the date and time, down to the second, such as `backup-2026-11-20-14:05:09`.
+3. Press Merge into this one and choose the short ledger, the one with no realm. Leave "Delete the other ledger" unchecked until the lines look right. A repeated amount on another day is kept.
+
 Open the guild bank and press Scan, or type `/scan`. With the default settings the addon scans when the bank opens, then again every 2 minutes while it stays open.
 
 | Command | What it does |
@@ -32,7 +38,7 @@ Open the guild bank and press Scan, or type `/scan`. With the default settings t
 
 The lines join the guild open in the window. Leave `guild` and `realm` blank. Those cells are not stored on the line. The next Transactions export fills them from that guild. If you do fill them in, every row has to name that same guild, and it has to be the guild on screen. The realm is the game realm with the spaces removed. Log into that guild on this account once before the first import. Every line needs a character. A blank name is refused, and nothing from that paste is saved. Character totals and item totals cannot be imported.
 
-A line with the same person, action, and amount as one already saved is kept as that saved line.
+A line with the same person, action, and amount on the same day is kept as that saved line. The same amount on another day is added.
 
 | Column | Allowed values |
 | --- | --- |
@@ -54,7 +60,7 @@ A line with the same person, action, and amount as one already saved is kept as 
 
 A deposit summary is listed and left out of the totals. A move is listed and left out of the item totals. `withdrawForTab` counts as gold out and as a tab purchase.
 
-**Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Click a guild to view it. Backup this ledger saves a copy. The copy keeps the guild name, and its realm is `backup-` plus the date and time, down to the second, such as `backup-2026-11-20-14:05:09`. Two backups in the same second get a number on the end. Merge into this one folds another saved ledger into the guild you are viewing and keeps both, so you can compare them. A repeated amount on another day is kept. The pop-up has a box you can check to delete the other ledger. That box starts unchecked. The name and realm you are viewing stay as they are. Nothing is merged on its own. Delete removes the ledger you are viewing from this account.
+**Settings** holds auto-scan, the minimap button, the rescan interval, and the saved guilds. Click a guild to view it. Backup this ledger saves a copy under `backup-` and the time. A second backup in the same second gets a number on the end. Merge into this one folds another saved ledger into the guild you are viewing and keeps both. The pop-up has a box you can check to delete the other ledger. That box starts unchecked. The name and realm you are viewing stay as they are. Delete removes the ledger you are viewing from this account.
 
 ## How the log is kept
 
@@ -89,8 +95,8 @@ After the beta, use `YYYY.MINOR.PATCH`. `2026.1.0` is the first release. A featu
 Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ```sh
-git tag 0.1.3-beta
-git push origin main 0.1.3-beta
+git tag 0.2.0-beta
+git push origin main 0.2.0-beta
 ```
 
 A tag whose name contains `beta` is filed as a beta. A tag whose name contains `alpha` is an alpha. Any other tag is a release. A push to `main` without a tag does not publish a file.

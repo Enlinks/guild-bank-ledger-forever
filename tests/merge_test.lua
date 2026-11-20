@@ -1018,6 +1018,21 @@ eq(removed, 0, "merging again adds nothing new")
 eq(GuildBankLedgerForeverDB.guilds["Guild-"], nil, "the checkbox removes the other ledger")
 eq(GuildBankLedgerForeverDB.settings.viewKey, "Guild-Realm", "deleting the viewed ledger leaves the one that was kept")
 
+local warned = GBLF.BlankRealmWarning({
+	a = { name = "Guild", realm = "" },
+	b = { name = "Guild", realm = "Realm" },
+	c = { name = "Other", realm = "" },
+})
+eq(#warned, 1, "a blank realm warns when another realm is saved")
+eq(warned[1], "Guild", "the warning names that guild")
+local backupOnly = GBLF.BlankRealmWarning({
+	a = { name = "Guild", realm = "" },
+	b = { name = "Guild", realm = "backup-2026-11-20-12:00:09" },
+})
+eq(#backupOnly, 0, "a backup is not the other ledger")
+eq(#GBLF.BlankRealmWarning({ a = { name = "Guild", realm = "Realm" } }), 0, "a filled realm does not warn")
+eq(#GBLF.BlankRealmWarning(nil), 0, "no guilds does not warn")
+
 if failed > 0 then
 	io.stderr:write(string.format("%d failed\n", failed))
 	os.exit(1)

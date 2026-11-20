@@ -86,7 +86,40 @@ function GBLF.InitDB()
 	for key, guild in pairs(db.guilds) do
 		GBLF.caches[key] = GBLF.Ledger.Rebuild(guild)
 	end
+	local blank = GBLF.BlankRealmWarning(db.guilds)
+	for i = 1, #blank do
+		GBLF.Print("A recent game update left the realm name blank, so " .. blank[i] .. " started a second ledger. The older lines are still saved. In Settings, back up the ledger you want to keep, then use Merge into this one.")
+	end
 	GBLF.dbReady = true
+end
+
+function GBLF.BlankRealmWarning(guilds)
+	local named = {}
+	local blank = {}
+	if type(guilds) ~= "table" then
+		return blank
+	end
+	for _, guild in pairs(guilds) do
+		if type(guild) == "table" then
+			local name = guild.name
+			local realm = guild.realm or ""
+			if type(name) == "string" and name ~= "" then
+				if realm == "" then
+					blank[name] = true
+				elseif string.sub(realm, 1, 7) ~= "backup-" then
+					named[name] = true
+				end
+			end
+		end
+	end
+	local found = {}
+	for name in pairs(blank) do
+		if named[name] then
+			found[#found + 1] = name
+		end
+	end
+	table.sort(found)
+	return found
 end
 
 function GBLF.Settings()
