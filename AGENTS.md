@@ -42,4 +42,5 @@ Do not claim an in-game check passed unless it was actually done. Say when a cha
 - Release notes in `CHANGELOG.md` follow Cisco caveat style. A bug found in a shipped release is added to that release as an open caveat. When a later release fixes it, the earlier note stays and names the release that resolved it.
 - A transaction export keeps the newest 5,000 lines.
 - There is no sync between accounts. Characters on the same WoW account share one save.
+- Issues, release notes, commit messages, and tests use stand-in names. Do not copy an in-game character, guild, or realm out of a real ledger. The author name in the copyright stays.
 - Prefer the `C_CurrencyInfo` and `C_Item` fallbacks already in `Core.lua` and `Scan.lua` when a removed global is missing.
